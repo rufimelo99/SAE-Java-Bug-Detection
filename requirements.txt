@@ -10,4 +10,5 @@ tqdm==4.66.5
 transformers
 torchvision
 matplotlib
+pre-commit
 ml_security

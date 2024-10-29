@@ -6,4 +6,5 @@
 ```bash
 conda create -n drl_patches python=3.10
 pip install -e .
+pre-commit install
 ```
