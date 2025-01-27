@@ -1,6 +1,5 @@
 import argparse
 import json
-from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -10,6 +9,7 @@ from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
 from drl_patches.logger import logger
+from drl_patches.sparse_autoencoders.schemas import AvailableModels
 from drl_patches.sparse_autoencoders.utils import (
     imshow,
     line,
@@ -31,13 +31,10 @@ MSR_df = pd.read_csv("MSR_data_vul.csv")
 MSR_df.head()
 
 
-class AvailableModels(str, Enum):
-    GPT2_SMALL = "gpt2-small"
-
-
 def store_values(
     jsonl_path: str,
     index: int,
+    model: str,
     logit_lens_logit_diffs: np.ndarray,
     labels: list,
     append: bool = False,
@@ -48,6 +45,7 @@ def store_values(
                 "index": index,
                 "logit_diff": logit_lens_logit_diffs.tolist(),
                 "labels": labels,
+                "model": model,
             },
             f,
         )
@@ -55,6 +53,7 @@ def store_values(
 
 
 def inference(
+    model_arg,
     model,
     vulnerable_func,
     safe_func,
@@ -97,11 +96,16 @@ def inference(
     )
 
     store_values(
-        output_logit_diff_path, index, logit_lens_logit_diffs, labels, append=True
+        output_logit_diff_path,
+        index,
+        model_arg.value,
+        logit_lens_logit_diffs,
+        labels,
+        append=True,
     )
 
     # Save the figure
-    fig.write_html("logit_lens_logit_diffs.html")
+    # fig.write_html("logit_lens_logit_diffs.html")
 
     per_layer_residual, labels = cache.decompose_resid(
         layer=-1, pos_slice=-1, return_labels=True
@@ -111,7 +115,12 @@ def inference(
     )
 
     store_values(
-        output_attention_path, index, per_layer_logit_diffs, labels, append=True
+        output_attention_path,
+        index,
+        model_arg.value,
+        per_layer_logit_diffs,
+        labels,
+        append=True,
     )
 
     fig = line(
@@ -119,7 +128,7 @@ def inference(
         hover_name=labels,
         title="Logit Difference From Each Layer for dataset example {}".format(index),
     )
-    fig.write_html("per_layer_logit_diffs.html")
+    # fig.write_html("per_layer_logit_diffs.html")
 
 
 def main(
@@ -141,6 +150,7 @@ def main(
 
     for index, row in tqdm(MSR_df.iterrows(), total=MSR_df.shape[0]):
         inference(
+            model_arg,
             model,
             row["func_before"],
             row["func_after"],
