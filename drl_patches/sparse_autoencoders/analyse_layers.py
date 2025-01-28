@@ -1,6 +1,7 @@
 import argparse
 import json
 
+import einops
 import numpy as np
 import pandas as pd
 import torch
@@ -9,7 +10,7 @@ from tqdm import tqdm
 from transformer_lens import HookedTransformer
 
 from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.schemas import AvailableModels
+from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
 from drl_patches.sparse_autoencoders.utils import (
     imshow,
     line,
@@ -19,12 +20,11 @@ from drl_patches.sparse_autoencoders.utils import (
 )
 
 if torch.backends.mps.is_available():
-    device = "mps"
+    DEVICE = "mps"
 else:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
-
-logger.info("Device", device=device)
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"
+logger.info("Device", device=DEVICE)
 
 # TODO: Fix this for other entries
 MSR_df = pd.read_csv("MSR_data_cleaned_vul.csv")
@@ -37,6 +37,7 @@ def store_values(
     model: str,
     logit_lens_logit_diffs: np.ndarray,
     labels: list,
+    plot_type: PlotType,
     append: bool = False,
 ):
     with open(jsonl_path, "a" if append else "w") as f:
@@ -46,6 +47,7 @@ def store_values(
                 "logit_diff": logit_lens_logit_diffs.tolist(),
                 "labels": labels,
                 "model": model,
+                "plot_type": plot_type,
             },
             f,
         )
@@ -58,6 +60,7 @@ def inference(
     vulnerable_func,
     safe_func,
     index,
+    output_acc_residual_path,
     output_logit_diff_path,
     output_attention_path,
     visualize_figures=False,
@@ -100,11 +103,12 @@ def inference(
         # fig.write_html("logit_lens_logit_diffs.html")
 
     store_values(
-        output_logit_diff_path,
+        output_acc_residual_path,
         index,
         model_arg.value,
         logit_lens_logit_diffs,
         labels,
+        plot_type=PlotType.ACCUMULATED_RESIDUAL,
         append=True,
     )
 
@@ -116,11 +120,12 @@ def inference(
     )
 
     store_values(
-        output_attention_path,
+        output_logit_diff_path,
         index,
         model_arg.value,
         per_layer_logit_diffs,
         labels,
+        plot_type=PlotType.LAYER_WISE,
         append=True,
     )
 
@@ -133,12 +138,42 @@ def inference(
             ),
         )
         # fig.write_html("per_layer_logit_diffs.html")
+    per_head_residual, labels = cache.stack_head_results(
+        layer=-1, pos_slice=-1, return_labels=True
+    )
+    per_head_logit_diffs = residual_stack_to_logit_diff(
+        prompts, per_head_residual, cache, logit_diff_directions
+    )
+    per_head_logit_diffs = einops.rearrange(
+        per_head_logit_diffs,
+        "(layer head_index) -> layer head_index",
+        layer=model.cfg.n_layers,
+        head_index=model.cfg.n_heads,
+    )
+
+    store_values(
+        output_attention_path,
+        index,
+        model_arg.value,
+        per_head_logit_diffs,
+        labels,
+        plot_type=PlotType.ATTENTION,
+        append=True,
+    )
+
+    if visualize_figures:
+        imshow(
+            per_head_logit_diffs,
+            labels={"x": "Head", "y": "Layer"},
+            title="Logit Difference From Each Head",
+        )
 
 
 def main(
     model_arg: AvailableModels,
-    output_logit_diff_path: str = "accumulated_residual_stream.jsonl",
-    output_attention_path: str = "logit_difference_by_layer.jsonl",
+    output_acc_residual_path: str = "accumulated_residual_stream.jsonl",
+    output_logit_diff_path: str = "logit_difference_by_layer.jsonl",
+    output_attention_path: str = "attention_patterns.jsonl",
     before_func_col: str = "func_before",
     after_func_col: str = "func_after",
 ):
@@ -150,6 +185,7 @@ def main(
         center_writing_weights=True,
         fold_ln=True,
         # refactor_factored_attn_matrices=True,
+        device=DEVICE,
     )
     torch.set_grad_enabled(False)
     print("Disabled automatic differentiation")
@@ -161,6 +197,7 @@ def main(
             row[before_func_col],
             row[after_func_col],
             index,
+            output_acc_residual_path,
             output_logit_diff_path,
             output_attention_path,
         )
