@@ -47,7 +47,6 @@ if __name__ == "__main__":
 
     fig = line(
         avgs["logit_diff"],
-        x=np.arange(model.cfg.n_layers * 2 + 1) / 2,
         hover_name=avgs["labels"],
         title="Average Logit Difference From Accumulate Residual Stream",
     )

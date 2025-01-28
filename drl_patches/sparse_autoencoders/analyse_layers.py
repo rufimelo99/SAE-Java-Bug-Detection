@@ -27,7 +27,7 @@ device = "cpu"
 logger.info("Device", device=device)
 
 # TODO: Fix this for other entries
-MSR_df = pd.read_csv("MSR_data_vul.csv")
+MSR_df = pd.read_csv("MSR_data_cleaned_vul.csv")
 MSR_df.head()
 
 
@@ -60,6 +60,7 @@ def inference(
     index,
     output_logit_diff_path,
     output_attention_path,
+    visualize_figures=False,
 ):
     # prompts = [MSR_df.iloc[0]["func_before"]] + [MSR_df.iloc[0]["func_after"]]
     prompts = [vulnerable_func] + [safe_func]
@@ -86,14 +87,17 @@ def inference(
     logit_lens_logit_diffs = residual_stack_to_logit_diff(
         prompts, accumulated_residual, cache, logit_diff_directions
     )
-    fig = line(
-        logit_lens_logit_diffs,
-        x=np.arange(model.cfg.n_layers * 2 + 1) / 2,
-        hover_name=labels,
-        title="Logit Difference From Accumulate Residual Stream for dataset example {}".format(
-            index
-        ),
-    )
+    if visualize_figures:
+        fig = line(
+            logit_lens_logit_diffs,
+            x=np.arange(model.cfg.n_layers * 2 + 1) / 2,
+            hover_name=labels,
+            title="Logit Difference From Accumulate Residual Stream for dataset example {}".format(
+                index
+            ),
+        )
+        # Save the figure
+        # fig.write_html("logit_lens_logit_diffs.html")
 
     store_values(
         output_logit_diff_path,
@@ -103,9 +107,6 @@ def inference(
         labels,
         append=True,
     )
-
-    # Save the figure
-    # fig.write_html("logit_lens_logit_diffs.html")
 
     per_layer_residual, labels = cache.decompose_resid(
         layer=-1, pos_slice=-1, return_labels=True
@@ -123,18 +124,23 @@ def inference(
         append=True,
     )
 
-    fig = line(
-        per_layer_logit_diffs,
-        hover_name=labels,
-        title="Logit Difference From Each Layer for dataset example {}".format(index),
-    )
-    # fig.write_html("per_layer_logit_diffs.html")
+    if visualize_figures:
+        fig = line(
+            per_layer_logit_diffs,
+            hover_name=labels,
+            title="Logit Difference From Each Layer for dataset example {}".format(
+                index
+            ),
+        )
+        # fig.write_html("per_layer_logit_diffs.html")
 
 
 def main(
     model_arg: AvailableModels,
     output_logit_diff_path: str = "accumulated_residual_stream.jsonl",
     output_attention_path: str = "logit_difference_by_layer.jsonl",
+    before_func_col: str = "func_before",
+    after_func_col: str = "func_after",
 ):
     logger.info("Loading Model.", model=model_arg)
 
@@ -143,7 +149,7 @@ def main(
         center_unembed=True,
         center_writing_weights=True,
         fold_ln=True,
-        refactor_factored_attn_matrices=True,
+        # refactor_factored_attn_matrices=True,
     )
     torch.set_grad_enabled(False)
     print("Disabled automatic differentiation")
@@ -152,8 +158,8 @@ def main(
         inference(
             model_arg,
             model,
-            row["func_before"],
-            row["func_after"],
+            row[before_func_col],
+            row[after_func_col],
             index,
             output_logit_diff_path,
             output_attention_path,
