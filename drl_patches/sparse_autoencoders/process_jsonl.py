@@ -7,6 +7,8 @@ import torch
 from transformer_lens import HookedTransformer
 
 from drl_patches.logger import logger
+from drl_patches.sparse_autoencoders.schemas import PlotType
+from drl_patches.sparse_autoencoders.utils import imshow, line
 
 
 def plot_with_confidence(
@@ -79,9 +81,13 @@ if __name__ == "__main__":
                     avgs["logit_diff"] = line_content["logit_diff"]
                     avgs["labels"] = line_content["labels"]
                     avgs["model"] = line_content["model"]
+                    avgs["plot_type"] = line_content["plot_type"]
                 else:
-                    for i, logit_diff in enumerate(line_content["logit_diff"]):
-                        avgs["logit_diff"][i] += logit_diff
+                    # for i, logit_diff in enumerate(line_content["logit_diff"]):
+                    # avgs["logit_diff"][i] += logit_diff
+                    avgs["logit_diff"] = np.sum(
+                        [avgs["logit_diff"], line_content["logit_diff"]], axis=0
+                    )
 
                 n_lines += 1
             except json.JSONDecodeError:
@@ -96,13 +102,6 @@ if __name__ == "__main__":
     for i, logit_diff in enumerate(avgs["logit_diff"]):
         avgs["logit_diff"][i] /= n_lines
 
-    # Calculate confidence intervals
-    conf_intervals = [
-        np.std([line_content["logit_diff"][i] for line_content in all_lines])
-        / np.sqrt(n_lines)
-        for i in range(len(avgs["logit_diff"]))
-    ]
-
     # Load model
     model = HookedTransformer.from_pretrained(
         avgs["model"],
@@ -115,16 +114,31 @@ if __name__ == "__main__":
     with torch.no_grad():
         print("Disabled automatic differentiation")
 
-    # Visualize with confidence intervals
-    plot_with_confidence(
-        logit_diff=avgs["logit_diff"],
-        labels=avgs["labels"],
-        confidence_intervals=conf_intervals,
-        title="Average Logit Difference with Confidence Intervals",
-    )
-
-    # Save output
-    with open(args.output, "w") as f:
-        json.dump(avgs, f)
+    if avgs["plot_type"] == PlotType.ATTENTION.value:
+        imshow(
+            avgs["logit_diff"],
+            labels={"x": "Head", "y": "Layer"},
+            title="Logit Difference From Each Head",
+        )
+    elif avgs["plot_type"] == PlotType.SAE_FEATURE_IMPORTANCE.value:
+        fig = line(
+            avgs["logit_diff"],
+            title="Feature activations for the prompt",
+            labels={"index": "Feature", "value": "Activation"},
+        )
+    else:
+        # Calculate confidence intervals
+        conf_intervals = [
+            np.std([line_content["logit_diff"][i] for line_content in all_lines])
+            / np.sqrt(n_lines)
+            for i in range(len(avgs["logit_diff"]))
+        ]
+        # Visualize with confidence intervals
+        plot_with_confidence(
+            logit_diff=avgs["logit_diff"],
+            labels=avgs["labels"],
+            confidence_intervals=conf_intervals,
+            title="Average Logit Difference with Confidence Intervals",
+        )
 
     logger.info("Processing complete. Results saved to output.")

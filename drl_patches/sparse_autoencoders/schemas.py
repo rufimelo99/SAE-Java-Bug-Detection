@@ -10,3 +10,4 @@ class PlotType(str, Enum):
     LAYER_WISE = "layer-wise"
     ATTENTION = "attention"
     ACCUMULATED_RESIDUAL = "accumulated-residual"
+    SAE_FEATURE_IMPORTANCE = "sae-feature-importance"
