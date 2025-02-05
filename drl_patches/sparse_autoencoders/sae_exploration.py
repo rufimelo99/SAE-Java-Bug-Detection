@@ -3,6 +3,7 @@ import torch
 from sae_lens import SAE, HookedSAETransformer
 from tqdm import trange
 
+from drl_patches.logger import logger
 from drl_patches.sparse_autoencoders.analyse_layers import store_values
 from drl_patches.sparse_autoencoders.schemas import PlotType
 
@@ -12,7 +13,7 @@ if torch.backends.mps.is_available():
 else:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-print(f"Device: {device}")
+logger.info("Getting device.", device=device)
 
 RELEASE = "gpt2-small-res-jb"
 SAE_ID = "blocks.0.hook_resid_pre"
@@ -49,13 +50,36 @@ for i in trange(len(MSR_df)):
     feature_activation_df["diff"] = abs(
         feature_activation_df["vulnerable"] - feature_activation_df["secure"]
     )
+    safe_values = feature_activation_df["secure"].values
+    vuln_values = feature_activation_df["vulnerable"].values
     diff_values = feature_activation_df["diff"].values
 
     store_values(
-        "accunuated_featuree_importance.jsonl",
+        "accumulated_featuree_importance_safe.jsonl",
+        i,
+        MODEL_NAME,
+        safe_values,
+        index,
+        PlotType.SAE_FEATURE_IMPORTANCE,
+        append=True,
+    )
+
+    store_values(
+        "accumulated_featuree_importance_vuln.jsonl",
+        i,
+        MODEL_NAME,
+        vuln_values,
+        index,
+        PlotType.SAE_FEATURE_IMPORTANCE,
+        append=True,
+    )
+
+    store_values(
+        "accunuated_featuree_importance_diff.jsonl",
         i,
         MODEL_NAME,
         diff_values,
         index,
         PlotType.SAE_FEATURE_IMPORTANCE,
+        append=True,
     )
