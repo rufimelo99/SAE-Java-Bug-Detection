@@ -19,7 +19,7 @@ RELEASE = "gpt2-small-res-jb"
 SAE_ID = "blocks.0.hook_resid_pre"
 HOOK_POINT = ...  # "residuals"
 MODEL_NAME = "gpt2-small"  # "meta-llama/Llama-3.1-8B"
-MSR_df = pd.read_csv("MSR_data_cleaned_vul.csv")
+MSR_df = pd.read_csv("gbug-java.csv")
 
 model = HookedSAETransformer.from_pretrained(MODEL_NAME, device=device)
 
@@ -29,7 +29,6 @@ sae, cfg_dict, sparsity = SAE.from_pretrained(
     device=device,
 )
 
-MAXIMUM = 100
 for i in trange(len(MSR_df)):
     prompt = [
         MSR_df.iloc[i]["func_before"],
@@ -55,7 +54,7 @@ for i in trange(len(MSR_df)):
     diff_values = feature_activation_df["diff"].values
 
     store_values(
-        "accumulated_featuree_importance_safe.jsonl",
+        "artifacts/accumulated_featuree_importance_safe.jsonl",
         i,
         MODEL_NAME,
         safe_values,
@@ -65,7 +64,7 @@ for i in trange(len(MSR_df)):
     )
 
     store_values(
-        "accumulated_featuree_importance_vuln.jsonl",
+        "artifacts/accumulated_featuree_importance_vuln.jsonl",
         i,
         MODEL_NAME,
         vuln_values,
@@ -75,7 +74,7 @@ for i in trange(len(MSR_df)):
     )
 
     store_values(
-        "accunuated_featuree_importance_diff.jsonl",
+        "artifacts/accunuated_featuree_importance_diff.jsonl",
         i,
         MODEL_NAME,
         diff_values,

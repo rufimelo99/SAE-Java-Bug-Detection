@@ -26,10 +26,6 @@ else:
 DEVICE = "cpu"
 logger.info("Device", device=DEVICE)
 
-# TODO: Fix this for other entries
-MSR_df = pd.read_csv("MSR_data_cleaned_vul.csv")
-MSR_df.head()
-
 
 def store_values(
     jsonl_path: str,
@@ -171,9 +167,9 @@ def inference(
 
 def main(
     model_arg: AvailableModels,
-    output_acc_residual_path: str = "accumulated_residual_stream.jsonl",
-    output_logit_diff_path: str = "logit_difference_by_layer.jsonl",
-    output_attention_path: str = "attention_patterns.jsonl",
+    output_acc_residual_path: str = "artifacts/accumulated_residual_stream.jsonl",
+    output_logit_diff_path: str = "artifacts/logit_difference_by_layer.jsonl",
+    output_attention_path: str = "artifacts/attention_patterns.jsonl",
     before_func_col: str = "func_before",
     after_func_col: str = "func_after",
 ):
@@ -219,7 +215,14 @@ if __name__ == "__main__":
         default=AvailableModels.GPT2_SMALL.value,
         required=True,
     )
+    parser.add_argument(
+        "--csv_path",
+        default="artifacts/MSR_data_cleaned_vul.csv",
+    )
 
     args = parser.parse_args()
+
+    # TODO: Fix this for other entries
+    MSR_df = pd.read_csv(args.csv_path)
     args.model = AvailableModels(args.model)
     main(model_arg=args.model)
