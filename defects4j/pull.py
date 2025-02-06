@@ -71,7 +71,7 @@ def get_bug_info(project, bug_id):
 projects = {
     # "Chart": range(1, 27),
     # "Cli": [i for i in range(1, 41) if i != 6],
-    # "Closure": [i for i in range(1, 63)] # dropping non active bugs 
+    # "Closure": [i for i in range(1, 63)] # dropping non active bugs
     # + [i for i in range(64, 93)]
     # + [i for i in range(94, 177)],
     # "Codec": range(1, 19),
@@ -80,7 +80,7 @@ projects = {
     # "Csv": range(1, 17),
     # "Gson": range(1, 19),
     # "JacksonCore": range(1, 27),
-    "JacksonDatabind": [i for i in range(1, 65)] # dropping non active bugs 
+    "JacksonDatabind": [i for i in range(1, 65)]  # dropping non active bugs
     + [i for i in range(66, 89)]
     + [i for i in range(90, 113)],
     "JacksonXml": range(1, 7),
@@ -89,7 +89,9 @@ projects = {
     "Lang": [1]
     + [i for i in range(3, 18)]
     + [i for i in range(19, 25)]
-    + [i for i in range(26, 66) if i not in [2, 18, 25, 48]], # dropping non active bugs 
+    + [
+        i for i in range(26, 66) if i not in [2, 18, 25, 48]
+    ],  # dropping non active bugs
     "Math": range(1, 107),
     "Mockito": range(1, 39),
     "Time": [i for i in range(1, 21)] + [i for i in range(22, 28)],
@@ -99,7 +101,7 @@ projects = {
 for project in projects.keys():
     output_file = f"defects4j_bugs_{project}.jsonl"
     with open(output_file, "w") as outfile:
-        for bug_id in projects[project]: 
+        for bug_id in projects[project]:
             print(f"Processing {project} - Bug {bug_id}")
             bug_info = get_bug_info(project, bug_id)
             # Write the bug data to the JSONL file
