@@ -19,7 +19,7 @@ RELEASE = "gpt2-small-res-jb"
 SAE_ID = "blocks.0.hook_resid_pre"
 HOOK_POINT = ...  # "residuals"
 MODEL_NAME = "gpt2-small"  # "meta-llama/Llama-3.1-8B"
-MSR_df = pd.read_csv("gbug-java.csv")
+MSR_df = pd.read_csv("artifacts/gbug-java.csv")
 
 model = HookedSAETransformer.from_pretrained(MODEL_NAME, device=device)
 
@@ -37,7 +37,6 @@ for i in trange(len(MSR_df)):
     _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
 
     index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-
     feature_activation_df = pd.DataFrame(
         cache["blocks.0.hook_resid_pre.hook_sae_acts_post"][0, -1, :].cpu().numpy(),
         index=index,
@@ -55,30 +54,31 @@ for i in trange(len(MSR_df)):
 
     store_values(
         "artifacts/accumulated_featuree_importance_safe.jsonl",
-        i,
-        MODEL_NAME,
-        safe_values,
-        index,
-        PlotType.SAE_FEATURE_IMPORTANCE,
         append=True,
+        index=i,
+        model=MODEL_NAME,
+        logit_lens_logit_diffs=safe_values.tolist(),
+        labels=index,
+        plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
     )
 
     store_values(
         "artifacts/accumulated_featuree_importance_vuln.jsonl",
-        i,
-        MODEL_NAME,
-        vuln_values,
-        index,
-        PlotType.SAE_FEATURE_IMPORTANCE,
         append=True,
+        index=i,
+        model=MODEL_NAME,
+        logit_lens_logit_diffs=vuln_values.tolist(),
+        labels=index,
+        plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
     )
 
     store_values(
         "artifacts/accunuated_featuree_importance_diff.jsonl",
-        i,
-        MODEL_NAME,
-        diff_values,
-        index,
-        PlotType.SAE_FEATURE_IMPORTANCE,
         append=True,
+        index=i,
+        model=MODEL_NAME,
+        logit_lens_logit_diffs=diff_values.tolist(),
+        labels=index,
+        plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
     )
+    breakpoint()

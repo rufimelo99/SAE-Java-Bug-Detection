@@ -1,5 +1,6 @@
 import argparse
 import json
+from typing import Any
 
 import einops
 import numpy as np
@@ -26,27 +27,33 @@ else:
 DEVICE = "cpu"
 logger.info("Device", device=DEVICE)
 
+from dataclasses import dataclass
+
+
+@dataclass
+class LayerAnalysis:
+    model: AvailableModels
+    logit_lens_logit_diffs: list
+    labels: list
+    plot_type: PlotType
+    index: list
+
 
 def store_values(
     jsonl_path: str,
-    index: int,
-    model: str,
-    logit_lens_logit_diffs: np.ndarray,
-    labels: list,
-    plot_type: PlotType,
     append: bool = False,
+    **kwargs: Any,
 ):
+    """
+    Stores provided keyword arguments as a JSON object in a .jsonl file.
+
+    Args:
+        jsonl_path (str): Path to the JSONL file.
+        append (bool): If True, append to the file; otherwise, overwrite. Defaults to False.
+        **kwargs (Any): Arbitrary keyword arguments to be stored in the JSON object.
+    """
     with open(jsonl_path, "a" if append else "w") as f:
-        json.dump(
-            {
-                "index": index,
-                "logit_diff": logit_lens_logit_diffs.tolist(),
-                "labels": labels,
-                "model": model,
-                "plot_type": plot_type,
-            },
-            f,
-        )
+        json.dump(kwargs, f)
         f.write("\n")
 
 
@@ -98,14 +105,23 @@ def inference(
         # Save the figure
         # fig.write_html("logit_lens_logit_diffs.html")
 
+    # TODO: This seems repetitive. I just added so we know the structure of the data
+    accumulated_res_la = LayerAnalysis(
+        model=model_arg,
+        logit_lens_logit_diffs=logit_lens_logit_diffs.tolist(),
+        labels=labels,
+        plot_type=PlotType.ACCUMULATED_RESIDUAL,
+        index=index,
+    )
+
     store_values(
         output_acc_residual_path,
-        index,
-        model_arg.value,
-        logit_lens_logit_diffs,
-        labels,
-        plot_type=PlotType.ACCUMULATED_RESIDUAL,
         append=True,
+        index=accumulated_res_la.index,
+        model=accumulated_res_la.model.value,
+        logit_lens_logit_diffs=accumulated_res_la.logit_lens_logit_diffs,
+        labels=accumulated_res_la.labels,
+        plot_type=accumulated_res_la.plot_type,
     )
 
     per_layer_residual, labels = cache.decompose_resid(
@@ -115,14 +131,22 @@ def inference(
         prompts, per_layer_residual, cache, logit_diff_directions
     )
 
-    store_values(
-        output_logit_diff_path,
-        index,
-        model_arg.value,
-        per_layer_logit_diffs,
-        labels,
+    logit_diff_layer_la = LayerAnalysis(
+        model=model_arg,
+        logit_lens_logit_diffs=per_layer_logit_diffs.tolist(),
+        labels=labels,
         plot_type=PlotType.LAYER_WISE,
+        index=index,
+    )
+
+    store_values(
+        output_acc_residual_path,
         append=True,
+        index=logit_diff_layer_la.index,
+        model=logit_diff_layer_la.model.value,
+        logit_lens_logit_diffs=logit_diff_layer_la.logit_lens_logit_diffs,
+        labels=logit_diff_layer_la.labels,
+        plot_type=logit_diff_layer_la.plot_type,
     )
 
     if visualize_figures:
@@ -147,14 +171,22 @@ def inference(
         head_index=model.cfg.n_heads,
     )
 
+    logit_diff_head_la = LayerAnalysis(
+        model=model_arg,
+        logit_lens_logit_diffs=per_head_logit_diffs.tolist(),
+        labels=labels,
+        plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
+        index=index,
+    )
+
     store_values(
-        output_attention_path,
-        index,
-        model_arg.value,
-        per_head_logit_diffs,
-        labels,
-        plot_type=PlotType.ATTENTION,
+        output_acc_residual_path,
         append=True,
+        index=logit_diff_head_la.index,
+        model=logit_diff_head_la.model.value,
+        logit_lens_logit_diffs=logit_diff_head_la.logit_lens_logit_diffs,
+        labels=logit_diff_head_la.labels,
+        plot_type=logit_diff_head_la.plot_type,
     )
 
     if visualize_figures:
