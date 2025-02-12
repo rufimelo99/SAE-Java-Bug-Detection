@@ -157,7 +157,6 @@ if __name__ == "__main__":
         help="The model to analyse",
         choices=model_options,
         default=AvailableModels.GPT2_SMALL.value,
-        required=True,
     )
 
     parser.add_argument(
@@ -166,7 +165,6 @@ if __name__ == "__main__":
         help="The release to analyse",
         choices=[r.value for r in list(Release.__members__.values())],
         default=Release.GPT2_SMALL_RES_JB.value,
-        required=True,
     )
 
     parser.add_argument(
@@ -175,7 +173,6 @@ if __name__ == "__main__":
         help="The SAE ID to analyse",
         choices=[s.value for s in list(SAE_ID.__members__.values())],
         default=SAE_ID.BLOCKS_0_HOOK_RESID_PRE.value,
-        required=True,
     )
 
     parser.add_argument(
@@ -184,7 +181,6 @@ if __name__ == "__main__":
         help="The cache component to analyse",
         choices=[c.value for c in list(CachedComponent.__members__.values())],
         default=CachedComponent.BLOCKS_0_HOOK_POST.value,
-        required=True,
     )
 
     parser.add_argument(
