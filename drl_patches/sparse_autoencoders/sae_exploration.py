@@ -29,7 +29,7 @@ class SAE_ID(str, Enum):
 
 
 class CachedComponent(str, Enum):
-    BLOCKS_0_HOOK_POST = "blocks.0.hook_resid_pre.hook_sae_acts_post"
+    HOOK_SAE_ACTS_POST = "hook_sae_acts_post"
 
 
 @dataclass
@@ -41,6 +41,7 @@ class SAEAnalysis:
     index: list
     release: str
     sae_id: str
+    cache_component: str
 
 
 def main(
@@ -73,11 +74,11 @@ def main(
 
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
         feature_activation_df = pd.DataFrame(
-            cache[cache_component][0, -1, :].cpu().numpy(),
+            cache[sae_id+"."+cache_component][0, -1, :].cpu().numpy(),
             index=index,
         )
         feature_activation_df.columns = ["vulnerable"]
-        feature_activation_df["secure"] = cache[cache_component][1, -1, :].cpu().numpy()
+        feature_activation_df["secure"] = cache[sae_id+"."+cache_component][1, -1, :].cpu().numpy()
         feature_activation_df["diff"] = abs(
             feature_activation_df["vulnerable"] - feature_activation_df["secure"]
         )
@@ -92,17 +93,19 @@ def main(
             plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
             index=i,
             release=release,
-            sae_id=SAE_ID,
+            sae_id=sae_id,
+            cache_component=cache_component,
         )
-
         store_values(
             feature_importance_path_safe,
             append=True,
             index=sae_analysis_safe.index,
             model=sae_analysis_safe.model,
-            logit_lens_logit_diffs=sae_analysis_safe.logit_lens_logit_diffs,
+            values=sae_analysis_safe.logit_lens_logit_diffs,
             labels=sae_analysis_safe.labels,
             plot_type=sae_analysis_safe.plot_type,
+            sae_id=sae_analysis_safe.sae_id,
+            cache_component=sae_analysis_safe.cache_component, 
         )
 
         sae_analysis_vuln = SAEAnalysis(
@@ -112,7 +115,8 @@ def main(
             plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
             index=i,
             release=release,
-            sae_id=SAE_ID,
+            sae_id=sae_id,
+            cache_component=cache_component,
         )
 
         store_values(
@@ -120,9 +124,11 @@ def main(
             append=True,
             index=sae_analysis_vuln.index,
             model=sae_analysis_vuln.model,
-            logit_lens_logit_diffs=sae_analysis_vuln.logit_lens_logit_diffs,
+            values=sae_analysis_vuln.logit_lens_logit_diffs,
             labels=sae_analysis_vuln.labels,
             plot_type=sae_analysis_vuln.plot_type,
+            sae_id=sae_analysis_vuln.sae_id,
+            cache_component=sae_analysis_vuln.cache_component,
         )
 
         sae_analysis_diff = SAEAnalysis(
@@ -132,7 +138,8 @@ def main(
             plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
             index=i,
             release=release,
-            sae_id=SAE_ID,
+            sae_id=sae_id,
+            cache_component=cache_component,
         )
 
         store_values(
@@ -140,9 +147,11 @@ def main(
             append=True,
             index=sae_analysis_diff.index,
             model=sae_analysis_diff.model,
-            logit_lens_logit_diffs=sae_analysis_diff.logit_lens_logit_diffs,
+            values=sae_analysis_diff.logit_lens_logit_diffs,
             labels=sae_analysis_diff.labels,
             plot_type=sae_analysis_diff.plot_type,
+            sae_id=sae_analysis_diff.sae_id,
+            cache_component=sae_analysis_diff.cache_component,
         )
 
 
@@ -180,7 +189,7 @@ if __name__ == "__main__":
         type=CachedComponent,
         help="The cache component to analyse",
         choices=[c.value for c in list(CachedComponent.__members__.values())],
-        default=CachedComponent.BLOCKS_0_HOOK_POST.value,
+        default=CachedComponent.HOOK_SAE_ACTS_POST.value,
     )
 
     parser.add_argument(
