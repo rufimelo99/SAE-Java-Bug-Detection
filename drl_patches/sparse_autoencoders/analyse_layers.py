@@ -58,140 +58,128 @@ def store_values(
 
 
 def inference(
-    model_arg,
-    model,
-    vulnerable_func,
-    safe_func,
-    index,
-    output_acc_residual_path,
-    output_logit_diff_path,
-    output_attention_path,
-    visualize_figures=False,
+    model_arg: AvailableModels,
+    model: HookedTransformer,
+    vulnerable_func: str,
+    safe_func: str,
+    index: int,
+    output_acc_residual_path: str,
+    output_logit_diff_path: str,
+    output_attention_path: str,
+    visualize_figures: bool = False,
 ):
-    # prompts = [MSR_df.iloc[0]["func_before"]] + [MSR_df.iloc[0]["func_after"]]
-    prompts = [vulnerable_func] + [safe_func]
+    prompts = [vulnerable_func, safe_func]
 
-    tokens = model.to_tokens(prompts, prepend_bos=True)
-    # Run the model and cache all activations.
-    original_logits: Float[torch.Tensor, "batch seq_len voc_size"]
-    original_logits, cache = model.run_with_cache(tokens)
+    # Tokenize the prompts
+    tokens = model.to_tokens(prompts)
 
-    # This is to understand why the model would prefer 1 over 0. Here we used eos for both approaches. We check the difference between prompts
-    # Converts to Token IDs
-    logit_diff_directions = torch.tensor(
-        [
-            model.to_single_token(model.tokenizer.eos_token),
-            model.to_single_token(model.tokenizer.eos_token),
-        ]
-    )
-    # Creates Embeddings for both tokens
-    logit_diff_directions = model.tokens_to_residual_directions(logit_diff_directions)
+    # Run the model with caching for both prompts
+    _, cache = model.run_with_cache(tokens)
 
-    accumulated_residual, labels = cache.accumulated_resid(
-        layer=-1, incl_mid=True, pos_slice=-1, return_labels=True
-    )
-    logit_lens_logit_diffs = residual_stack_to_logit_diff(
-        prompts, accumulated_residual, cache, logit_diff_directions
-    )
-    if visualize_figures:
-        fig = line(
-            logit_lens_logit_diffs,
-            x=np.arange(model.cfg.n_layers * 2 + 1) / 2,
-            hover_name=labels,
-            title="Logit Difference From Accumulate Residual Stream for dataset example {}".format(
-                index
-            ),
-        )
-        # Save the figure
-        # fig.write_html("logit_lens_logit_diffs.html")
+    # Initialize a list to store the average residual differences
+    avg_residual_diffs = []
+    labels = []
 
-    # TODO: This seems repetitive. I just added so we know the structure of the data
-    accumulated_res_la = LayerAnalysis(
-        model=model_arg,
-        logit_lens_logit_diffs=logit_lens_logit_diffs.tolist(),
-        labels=labels,
-        plot_type=PlotType.ACCUMULATED_RESIDUAL,
-        index=index,
-    )
+    # Iterate over each layer
+    for layer in range(model.cfg.n_layers):
+        # Extract the residual streams for the current layer
+        resid1 = cache[f"blocks.{layer}.hook_resid_post"][0]
+        resid2 = cache[f"blocks.{layer}.hook_resid_post"][1]
 
-    store_values(
-        output_acc_residual_path,
-        append=True,
-        index=accumulated_res_la.index,
-        model=accumulated_res_la.model.value,
-        logit_lens_logit_diffs=accumulated_res_la.logit_lens_logit_diffs,
-        labels=accumulated_res_la.labels,
-        plot_type=accumulated_res_la.plot_type,
-    )
+        # Ensure both residuals have the same shape
+        assert resid1.shape == resid2.shape, "Residual shapes do not match."
 
-    per_layer_residual, labels = cache.decompose_resid(
-        layer=-1, pos_slice=-1, return_labels=True
-    )
-    per_layer_logit_diffs = residual_stack_to_logit_diff(
-        prompts, per_layer_residual, cache, logit_diff_directions
-    )
+        # Compute the difference and take the mean over the sequence length
+        resid_diff = resid1 - resid2
+        avg_resid_diff = resid_diff.abs().mean(dim=1)  # Mean over sequence length
+
+        # Store the result
+        avg_residual_diffs.append(avg_resid_diff)
+        labels.append(f"Layer {layer}")
+
+    # Convert the list of tensors to a single tensor
+    avg_residual_diffs = torch.stack(avg_residual_diffs)
+    avg_residual_diffs = avg_residual_diffs.squeeze(1).mean(dim=1)
 
     logit_diff_layer_la = LayerAnalysis(
         model=model_arg,
-        logit_lens_logit_diffs=per_layer_logit_diffs.tolist(),
+        logit_lens_logit_diffs=avg_residual_diffs.tolist(),
         labels=labels,
         plot_type=PlotType.LAYER_WISE,
         index=index,
     )
 
     store_values(
-        output_acc_residual_path,
+        output_logit_diff_path,
         append=True,
         index=logit_diff_layer_la.index,
         model=logit_diff_layer_la.model.value,
-        logit_lens_logit_diffs=logit_diff_layer_la.logit_lens_logit_diffs,
+        logit_diff=logit_diff_layer_la.logit_lens_logit_diffs,
         labels=logit_diff_layer_la.labels,
         plot_type=logit_diff_layer_la.plot_type,
     )
 
     if visualize_figures:
         fig = line(
-            per_layer_logit_diffs,
+            avg_residual_diffs,
             hover_name=labels,
             title="Logit Difference From Each Layer for dataset example {}".format(
                 index
             ),
         )
         # fig.write_html("per_layer_logit_diffs.html")
-    per_head_residual, labels = cache.stack_head_results(
-        layer=-1, pos_slice=-1, return_labels=True
-    )
-    per_head_logit_diffs = residual_stack_to_logit_diff(
-        prompts, per_head_residual, cache, logit_diff_directions
-    )
-    per_head_logit_diffs = einops.rearrange(
-        per_head_logit_diffs,
-        "(layer head_index) -> layer head_index",
-        layer=model.cfg.n_layers,
-        head_index=model.cfg.n_heads,
-    )
+
+    num_layers = model.cfg.n_layers
+    num_heads = model.cfg.n_heads
+
+    # Initialize a list to store the average attention differences
+    avg_attention_diffs = []
+
+    for layer in range(num_layers):
+        # Extract attention patterns for both prompts
+        attn_pattern_1 = cache["pattern", layer][
+            0
+        ]  # Shape: [num_heads, seq_len, seq_len]
+        attn_pattern_2 = cache["pattern", layer][
+            1
+        ]  # Shape: [num_heads, seq_len, seq_len]
+
+        # Compute the absolute difference between the two attention patterns
+        attn_diff = torch.abs(
+            attn_pattern_1 - attn_pattern_2
+        )  # Shape: [num_heads, seq_len, seq_len]
+
+        # Average over the sequence length dimensions to get a single value per head
+        avg_attn_diff_per_head = attn_diff.mean(dim=(1, 2))  # Shape: [num_heads]
+
+        avg_attention_diffs.append(avg_attn_diff_per_head)
+
+    # Convert the list to a tensor for easier manipulation
+    avg_attention_diffs = torch.stack(
+        avg_attention_diffs
+    )  # Shape: [num_layers, num_heads]
 
     logit_diff_head_la = LayerAnalysis(
         model=model_arg,
-        logit_lens_logit_diffs=per_head_logit_diffs.tolist(),
+        logit_lens_logit_diffs=avg_attention_diffs.tolist(),
         labels=labels,
-        plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
+        plot_type=PlotType.ATTENTION,
         index=index,
     )
 
     store_values(
-        output_acc_residual_path,
+        output_attention_path,
         append=True,
         index=logit_diff_head_la.index,
         model=logit_diff_head_la.model.value,
-        logit_lens_logit_diffs=logit_diff_head_la.logit_lens_logit_diffs,
+        logit_diff=logit_diff_head_la.logit_lens_logit_diffs,
         labels=logit_diff_head_la.labels,
         plot_type=logit_diff_head_la.plot_type,
     )
 
     if visualize_figures:
         imshow(
-            per_head_logit_diffs,
+            avg_attention_diffs,
             labels={"x": "Head", "y": "Layer"},
             title="Logit Difference From Each Head",
         )
@@ -215,6 +203,7 @@ def main(
         # refactor_factored_attn_matrices=True,
         device=DEVICE,
     )
+    model.eval()
     torch.set_grad_enabled(False)
     print("Disabled automatic differentiation")
 

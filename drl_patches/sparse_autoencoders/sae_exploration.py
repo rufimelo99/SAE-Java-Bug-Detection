@@ -101,11 +101,11 @@ def main(
             append=True,
             index=sae_analysis_safe.index,
             model=sae_analysis_safe.model,
-            values=sae_analysis_safe.logit_lens_logit_diffs,
-            labels=sae_analysis_safe.labels,
             plot_type=sae_analysis_safe.plot_type,
             sae_id=sae_analysis_safe.sae_id,
-            cache_component=sae_analysis_safe.cache_component, 
+            cache_component=sae_analysis_safe.cache_component,
+            values=sae_analysis_safe.logit_lens_logit_diffs,
+            labels=sae_analysis_safe.labels, 
         )
 
         sae_analysis_vuln = SAEAnalysis(
@@ -124,11 +124,11 @@ def main(
             append=True,
             index=sae_analysis_vuln.index,
             model=sae_analysis_vuln.model,
-            values=sae_analysis_vuln.logit_lens_logit_diffs,
-            labels=sae_analysis_vuln.labels,
             plot_type=sae_analysis_vuln.plot_type,
             sae_id=sae_analysis_vuln.sae_id,
             cache_component=sae_analysis_vuln.cache_component,
+            values=sae_analysis_vuln.logit_lens_logit_diffs,
+            labels=sae_analysis_vuln.labels,
         )
 
         sae_analysis_diff = SAEAnalysis(
@@ -147,11 +147,11 @@ def main(
             append=True,
             index=sae_analysis_diff.index,
             model=sae_analysis_diff.model,
-            values=sae_analysis_diff.logit_lens_logit_diffs,
-            labels=sae_analysis_diff.labels,
             plot_type=sae_analysis_diff.plot_type,
             sae_id=sae_analysis_diff.sae_id,
             cache_component=sae_analysis_diff.cache_component,
+            values=sae_analysis_diff.logit_lens_logit_diffs,
+            labels=sae_analysis_diff.labels,
         )
 
 
