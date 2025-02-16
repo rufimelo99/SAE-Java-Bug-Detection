@@ -74,11 +74,13 @@ def main(
 
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
         feature_activation_df = pd.DataFrame(
-            cache[sae_id+"."+cache_component][0, -1, :].cpu().numpy(),
+            cache[sae_id + "." + cache_component][0, -1, :].cpu().numpy(),
             index=index,
         )
         feature_activation_df.columns = ["vulnerable"]
-        feature_activation_df["secure"] = cache[sae_id+"."+cache_component][1, -1, :].cpu().numpy()
+        feature_activation_df["secure"] = (
+            cache[sae_id + "." + cache_component][1, -1, :].cpu().numpy()
+        )
         feature_activation_df["diff"] = abs(
             feature_activation_df["vulnerable"] - feature_activation_df["secure"]
         )
@@ -105,7 +107,7 @@ def main(
             sae_id=sae_analysis_safe.sae_id,
             cache_component=sae_analysis_safe.cache_component,
             values=sae_analysis_safe.logit_lens_logit_diffs,
-            labels=sae_analysis_safe.labels, 
+            labels=sae_analysis_safe.labels,
         )
 
         sae_analysis_vuln = SAEAnalysis(
