@@ -61,9 +61,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input", type=str, required=True, help="Path to the input JSON lines file"
     )
-    parser.add_argument(
-        "--output", type=str, required=True, help="Path to save the output JSON file"
-    )
+    
     args = parser.parse_args()
 
     n_lines = 0
@@ -78,15 +76,15 @@ if __name__ == "__main__":
                 all_lines.append(line_content)
 
                 if n_lines == 0:
-                    avgs["logit_diff"] = line_content["logit_diff"]
+                    avgs["values"] = line_content["values"]
                     avgs["labels"] = line_content["labels"]
                     avgs["model"] = line_content["model"]
                     avgs["plot_type"] = line_content["plot_type"]
                 else:
                     # for i, logit_diff in enumerate(line_content["logit_diff"]):
                     # avgs["logit_diff"][i] += logit_diff
-                    avgs["logit_diff"] = np.sum(
-                        [avgs["logit_diff"], line_content["logit_diff"]], axis=0
+                    avgs["values"] = np.sum(
+                        [avgs["values"], line_content["values"]], axis=0
                     )
 
                 n_lines += 1
@@ -99,8 +97,8 @@ if __name__ == "__main__":
         raise ValueError("No valid data found in the input file.")
 
     # Average the logit differences
-    for i, logit_diff in enumerate(avgs["logit_diff"]):
-        avgs["logit_diff"][i] /= n_lines
+    for i, logit_diff in enumerate(avgs["values"]):
+        avgs["values"][i] /= n_lines
 
     # Load model
     model = HookedTransformer.from_pretrained(
@@ -116,26 +114,26 @@ if __name__ == "__main__":
 
     if avgs["plot_type"] == PlotType.ATTENTION.value:
         imshow(
-            avgs["logit_diff"],
+            avgs["values"],
             labels={"x": "Head", "y": "Layer"},
             title="Logit Difference From Each Head",
         )
     elif avgs["plot_type"] == PlotType.SAE_FEATURE_IMPORTANCE.value:
         fig = line(
-            avgs["logit_diff"],
-            title="Feature activations for the prompt",
+            avgs["values"],
+            title="Average Feature Activation Difference",
             labels={"index": "Feature", "value": "Activation"},
         )
     else:
         # Calculate confidence intervals
         conf_intervals = [
-            np.std([line_content["logit_diff"][i] for line_content in all_lines])
+            np.std([line_content["values"][i] for line_content in all_lines])
             / np.sqrt(n_lines)
-            for i in range(len(avgs["logit_diff"]))
+            for i in range(len(avgs["values"]))
         ]
         # Visualize with confidence intervals
         plot_with_confidence(
-            logit_diff=avgs["logit_diff"],
+            logit_diff=avgs["values"],
             labels=avgs["labels"],
             confidence_intervals=conf_intervals,
             title="Average Logit Difference with Confidence Intervals",

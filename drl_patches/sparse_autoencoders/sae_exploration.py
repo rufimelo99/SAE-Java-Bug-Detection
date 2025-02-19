@@ -1,7 +1,7 @@
 import argparse
 from dataclasses import dataclass
 from enum import Enum
-
+import os
 import pandas as pd
 import torch
 from sae_lens import SAE, HookedSAETransformer
@@ -26,6 +26,17 @@ class Release(str, Enum):
 
 class SAE_ID(str, Enum):
     BLOCKS_0_HOOK_RESID_PRE = "blocks.0.hook_resid_pre"
+    BLOCKS_1_HOOK_RESID_PRE = "blocks.1.hook_resid_pre"
+    BLOCKS_2_HOOK_RESID_PRE = "blocks.2.hook_resid_pre"
+    BLOCKS_3_HOOK_RESID_PRE = "blocks.3.hook_resid_pre"
+    BLOCKS_4_HOOK_RESID_PRE = "blocks.4.hook_resid_pre"
+    BLOCKS_5_HOOK_RESID_PRE = "blocks.5.hook_resid_pre"
+    BLOCKS_6_HOOK_RESID_PRE = "blocks.6.hook_resid_pre"
+    BLOCKS_7_HOOK_RESID_PRE = "blocks.7.hook_resid_pre"
+    BLOCKS_8_HOOK_RESID_PRE = "blocks.8.hook_resid_pre"
+    BLOCKS_9_HOOK_RESID_PRE = "blocks.9.hook_resid_pre"
+    BLOCKS_10_HOOK_RESID_PRE = "blocks.10.hook_resid_pre"
+    BLOCKS_11_HOOK_RESID_PRE = "blocks.11.hook_resid_pre"
 
 
 class CachedComponent(str, Enum):
@@ -50,9 +61,7 @@ def main(
     release: str,
     sae_id: str,
     cache_component: str,
-    feature_importance_path_safe: str,
-    feature_importance_path_vuln: str,
-    feature_importance_path_diff: str,
+    output_dir: str,
     before_func_col: str = "func_before",
     after_func_col: str = "func_after",
 ):
@@ -67,8 +76,8 @@ def main(
 
     for i in trange(len(MSR_df)):
         prompt = [
-            MSR_df.iloc[i][before_func_col],
-            MSR_df.iloc[i][after_func_col],
+            str(MSR_df.iloc[i][before_func_col]),
+            str(MSR_df.iloc[i][after_func_col]),
         ]
         _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
 
@@ -99,7 +108,7 @@ def main(
             cache_component=cache_component,
         )
         store_values(
-            feature_importance_path_safe,
+            os.path.join(output_dir, "feature_importance_safe.jsonl"),
             append=True,
             index=sae_analysis_safe.index,
             model=sae_analysis_safe.model,
@@ -122,7 +131,7 @@ def main(
         )
 
         store_values(
-            feature_importance_path_vuln,
+            os.path.join(output_dir, "feature_importance_vuln.jsonl"),
             append=True,
             index=sae_analysis_vuln.index,
             model=sae_analysis_vuln.model,
@@ -145,7 +154,7 @@ def main(
         )
 
         store_values(
-            feature_importance_path_diff,
+            os.path.join(output_dir, "feature_importance_diff.jsonl"),
             append=True,
             index=sae_analysis_diff.index,
             model=sae_analysis_diff.model,
@@ -214,22 +223,10 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--feature_importance_path_safe",
+        "--output_dir",
         type=str,
-        default="artifacts/feature_importance_safe.jsonl",
-        help="The path to store the feature importance values for safe samples",
-    )
-    parser.add_argument(
-        "--feature_importance_path_vuln",
-        type=str,
-        default="artifacts/feature_importance_vuln.jsonl",
-        help="The path to store the feature importance values for vulnerable samples",
-    )
-    parser.add_argument(
-        "--feature_importance_path_diff",
-        type=str,
-        default="artifacts/feature_importance_diff.jsonl",
-        help="The path to store the feature importance values for the difference between safe and vulnerable samples",
+        default="artifacts",
+        help="The directory to store the output files",
     )
 
     args = parser.parse_args()
@@ -241,7 +238,5 @@ if __name__ == "__main__":
         cache_component=args.cache_component,
         before_func_col=args.before_func_col,
         after_func_col=args.after_func_col,
-        feature_importance_path_safe=args.feature_importance_path_safe,
-        feature_importance_path_vuln=args.feature_importance_path_vuln,
-        feature_importance_path_diff=args.feature_importance_path_diff,
+        output_dir=args.output_dir,
     )

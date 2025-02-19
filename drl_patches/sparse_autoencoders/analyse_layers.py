@@ -1,7 +1,7 @@
 import argparse
 import json
 from typing import Any
-
+import os
 import einops
 import numpy as np
 import pandas as pd
@@ -52,6 +52,12 @@ def store_values(
         append (bool): If True, append to the file; otherwise, overwrite. Defaults to False.
         **kwargs (Any): Arbitrary keyword arguments to be stored in the JSON object.
     """
+    # If there is a directory path in the JSONL path, create the directory
+    directory = "/".join(jsonl_path.split("/")[:-1])
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
     with open(jsonl_path, "a" if append else "w") as f:
         json.dump(kwargs, f)
         f.write("\n")
