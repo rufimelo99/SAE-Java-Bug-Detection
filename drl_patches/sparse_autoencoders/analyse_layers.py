@@ -82,34 +82,27 @@ def inference(
     # Run the model with caching for both prompts
     _, cache = model.run_with_cache(tokens)
 
-    # Initialize a list to store the average residual differences
-    avg_residual_diffs = []
-    labels = []
+    accumulated_residual, labels = cache.accumulated_resid(layer=-1, incl_mid=True, pos_slice=-1, return_labels=True)
 
-    # Iterate over each layer
-    for layer in range(model.cfg.n_layers):
-        # Extract the residual streams for the current layer
-        resid1 = cache[f"blocks.{layer}.hook_resid_post"][0]
-        resid2 = cache[f"blocks.{layer}.hook_resid_post"][1]
+    
+    scaled_residual_stack = cache.apply_ln_to_stack(accumulated_residual, layer=-1, pos_slice=-1)
+    breakpoint()
+    # scaled_residual_stack_ = torch.linalg.vector_norm(scaled_residual_stack, dim=1, ord=2)
+    scaled_residual_stack_ = scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
 
-        # Ensure both residuals have the same shape
-        assert resid1.shape == resid2.shape, "Residual shapes do not match."
+    
+    # torch.Size([25, 2, 768])
+    # Compute the logit difference from the residual stack
+    # scaled_residual_stack_diff = scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
 
-        # Compute the difference and take the mean over the sequence length
-        resid_diff = resid1 - resid2
-        avg_resid_diff = resid_diff.abs().mean(dim=1)  # Mean over sequence length
-
-        # Store the result
-        avg_residual_diffs.append(avg_resid_diff)
-        labels.append(f"Layer {layer}")
-
-    # Convert the list of tensors to a single tensor
-    avg_residual_diffs = torch.stack(avg_residual_diffs)
-    avg_residual_diffs = avg_residual_diffs.squeeze(1).mean(dim=1)
+    scaled_residual_stack_diff = einops.einsum(scaled_residual_stack_, "layer hidden_size -> layer")
+    
+    
+    breakpoint()
 
     logit_diff_layer_la = LayerAnalysis(
         model=model_arg,
-        logit_lens_logit_diffs=avg_residual_diffs.tolist(),
+        logit_lens_logit_diffs=scaled_residual_stack_diff.tolist(),
         labels=labels,
         plot_type=PlotType.LAYER_WISE,
         index=index,
@@ -120,19 +113,13 @@ def inference(
         append=True,
         index=logit_diff_layer_la.index,
         model=logit_diff_layer_la.model.value,
-        logit_diff=logit_diff_layer_la.logit_lens_logit_diffs,
+        values=logit_diff_layer_la.logit_lens_logit_diffs,
         labels=logit_diff_layer_la.labels,
         plot_type=logit_diff_layer_la.plot_type,
     )
 
     if visualize_figures:
-        fig = line(
-            avg_residual_diffs,
-            hover_name=labels,
-            title="Logit Difference From Each Layer for dataset example {}".format(
-                index
-            ),
-        )
+        fig = line(scaled_residual_stack_diff,hover_name=labels,title="Logit Difference From Each Layer for dataset example {}".format(index),        )
         # fig.write_html("per_layer_logit_diffs.html")
 
     num_layers = model.cfg.n_layers
@@ -178,7 +165,7 @@ def inference(
         append=True,
         index=logit_diff_head_la.index,
         model=logit_diff_head_la.model.value,
-        logit_diff=logit_diff_head_la.logit_lens_logit_diffs,
+        values=logit_diff_head_la.logit_lens_logit_diffs,
         labels=logit_diff_head_la.labels,
         plot_type=logit_diff_head_la.plot_type,
     )
