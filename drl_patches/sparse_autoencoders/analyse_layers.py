@@ -74,7 +74,7 @@ def inference(
     output_attention_path: str,
     visualize_figures: bool = False,
 ):
-    prompts = [vulnerable_func, safe_func]
+    prompts = [str(vulnerable_func), str(safe_func)]
 
     # Tokenize the prompts
     tokens = model.to_tokens(prompts)
@@ -86,19 +86,16 @@ def inference(
 
     
     scaled_residual_stack = cache.apply_ln_to_stack(accumulated_residual, layer=-1, pos_slice=-1)
-    breakpoint()
+    
+    # torch.Size([25, 2, 768])
+
     # scaled_residual_stack_ = torch.linalg.vector_norm(scaled_residual_stack, dim=1, ord=2)
     scaled_residual_stack_ = scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
 
+    scaled_residual_stack_diff = torch.linalg.vector_norm(scaled_residual_stack_, dim=1, ord=2)
+    #scaled_residual_stack_diff = einops.einsum(scaled_residual_stack_, "layer hidden_size -> layer")
     
-    # torch.Size([25, 2, 768])
-    # Compute the logit difference from the residual stack
-    # scaled_residual_stack_diff = scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
 
-    scaled_residual_stack_diff = einops.einsum(scaled_residual_stack_, "layer hidden_size -> layer")
-    
-    
-    breakpoint()
 
     logit_diff_layer_la = LayerAnalysis(
         model=model_arg,
