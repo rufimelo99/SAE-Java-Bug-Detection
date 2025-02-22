@@ -1,7 +1,8 @@
 import argparse
+import os
 from dataclasses import dataclass
 from enum import Enum
-import os
+
 import pandas as pd
 import torch
 from sae_lens import SAE, HookedSAETransformer

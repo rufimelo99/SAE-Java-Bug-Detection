@@ -50,6 +50,7 @@ def plot_with_confidence(
         yaxis_title="Logit Difference",
         template="plotly_white",
     )
+    fig.update_yaxes(range=[0, 100])
 
     fig.show()
 
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input", type=str, required=True, help="Path to the input JSON lines file"
     )
-    
+
     args = parser.parse_args()
 
     n_lines = 0
@@ -99,15 +100,6 @@ if __name__ == "__main__":
     # Average the logit differences
     for i, logit_diff in enumerate(avgs["values"]):
         avgs["values"][i] /= n_lines
-
-    # Load model
-    model = HookedTransformer.from_pretrained(
-        avgs["model"],
-        center_unembed=True,
-        center_writing_weights=True,
-        fold_ln=True,
-        refactor_factored_attn_matrices=True,
-    )
 
     with torch.no_grad():
         print("Disabled automatic differentiation")

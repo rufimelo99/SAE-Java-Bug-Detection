@@ -1,7 +1,8 @@
 import argparse
 import json
-from typing import Any
 import os
+from typing import Any
+
 import einops
 import numpy as np
 import pandas as pd
@@ -57,7 +58,6 @@ def store_values(
     if directory:
         os.makedirs(directory, exist_ok=True)
 
-
     with open(jsonl_path, "a" if append else "w") as f:
         json.dump(kwargs, f)
         f.write("\n")
@@ -75,6 +75,7 @@ def inference(
     visualize_figures: bool = False,
 ):
     prompts = [str(vulnerable_func), str(safe_func)]
+    # prompts = [str(vulnerable_func)]
 
     # Tokenize the prompts
     tokens = model.to_tokens(prompts)
@@ -82,20 +83,22 @@ def inference(
     # Run the model with caching for both prompts
     _, cache = model.run_with_cache(tokens)
 
-    accumulated_residual, labels = cache.accumulated_resid(layer=-1, incl_mid=True, pos_slice=-1, return_labels=True)
+    accumulated_residual, labels = cache.accumulated_resid(
+        layer=-1, incl_mid=True, pos_slice=-1, return_labels=True
+    )
 
-    
-    scaled_residual_stack = cache.apply_ln_to_stack(accumulated_residual, layer=-1, pos_slice=-1)
-    
+    scaled_residual_stack = cache.apply_ln_to_stack(
+        accumulated_residual, layer=-1, pos_slice=-1
+    )
+
     # torch.Size([25, 2, 768])
 
-    # scaled_residual_stack_ = torch.linalg.vector_norm(scaled_residual_stack, dim=1, ord=2)
-    scaled_residual_stack_ = scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
-
-    scaled_residual_stack_diff = torch.linalg.vector_norm(scaled_residual_stack_, dim=1, ord=2)
-    #scaled_residual_stack_diff = einops.einsum(scaled_residual_stack_, "layer hidden_size -> layer")
-    
-
+    scaled_residual_stack_ = (
+        scaled_residual_stack[:, 0, :] - scaled_residual_stack[:, 1, :]
+    )
+    scaled_residual_stack_diff = torch.linalg.vector_norm(
+        scaled_residual_stack_, dim=1, ord=2
+    )
 
     logit_diff_layer_la = LayerAnalysis(
         model=model_arg,
@@ -116,63 +119,69 @@ def inference(
     )
 
     if visualize_figures:
-        fig = line(scaled_residual_stack_diff,hover_name=labels,title="Logit Difference From Each Layer for dataset example {}".format(index),        )
+        fig = line(
+            scaled_residual_stack_diff,
+            hover_name=labels,
+            title="Logit Difference From Each Layer for dataset example {}".format(
+                index
+            ),
+        )
         # fig.write_html("per_layer_logit_diffs.html")
 
-    num_layers = model.cfg.n_layers
-    num_heads = model.cfg.n_heads
+    # num_layers = model.cfg.n_layers
+    # num_heads = model.cfg.n_heads
 
-    # Initialize a list to store the average attention differences
-    avg_attention_diffs = []
+    # # Initialize a list to store the average attention differences
+    # avg_attention_diffs = []
 
-    for layer in range(num_layers):
-        # Extract attention patterns for both prompts
-        attn_pattern_1 = cache["pattern", layer][
-            0
-        ]  # Shape: [num_heads, seq_len, seq_len]
-        attn_pattern_2 = cache["pattern", layer][
-            1
-        ]  # Shape: [num_heads, seq_len, seq_len]
+    # for layer in range(num_layers):
+    #     # Extract attention patterns for both prompts
+    #     attn_pattern_1 = cache["pattern", layer][
+    #         0
+    #     ]  # Shape: [num_heads, seq_len, seq_len]
+    #     attn_pattern_2 = cache["pattern", layer][
+    #         1
+    #     ]  # Shape: [num_heads, seq_len, seq_len]
 
-        # Compute the absolute difference between the two attention patterns
-        attn_diff = torch.abs(
-            attn_pattern_1 - attn_pattern_2
-        )  # Shape: [num_heads, seq_len, seq_len]
+    #     # Compute the absolute difference between the two attention patterns
+    #     attn_diff = torch.abs(
+    #         attn_pattern_1 - attn_pattern_2
+    #     )  # Shape: [num_heads, seq_len, seq_len]
 
-        # Average over the sequence length dimensions to get a single value per head
-        avg_attn_diff_per_head = attn_diff.mean(dim=(1, 2))  # Shape: [num_heads]
+    #     # Average over the sequence length dimensions to get a single value per head
+    #     avg_attn_diff_per_head = attn_diff.mean(dim=(1, 2))  # Shape: [num_heads]
 
-        avg_attention_diffs.append(avg_attn_diff_per_head)
+    #     avg_attention_diffs.append(avg_attn_diff_per_head)
 
-    # Convert the list to a tensor for easier manipulation
-    avg_attention_diffs = torch.stack(
-        avg_attention_diffs
-    )  # Shape: [num_layers, num_heads]
+    # # Convert the list to a tensor for easier manipulation
+    # avg_attention_diffs = torch.stack(
+    #     avg_attention_diffs
+    # )  # Shape: [num_layers, num_heads]
 
-    logit_diff_head_la = LayerAnalysis(
-        model=model_arg,
-        logit_lens_logit_diffs=avg_attention_diffs.tolist(),
-        labels=labels,
-        plot_type=PlotType.ATTENTION,
-        index=index,
-    )
+    # logit_diff_head_la = LayerAnalysis(
+    #     model=model_arg,
+    #     logit_lens_logit_diffs=avg_attention_diffs.tolist(),
+    #     labels=labels,
+    #     plot_type=PlotType.ATTENTION,
+    #     index=index,
+    # )
 
-    store_values(
-        output_attention_path,
-        append=True,
-        index=logit_diff_head_la.index,
-        model=logit_diff_head_la.model.value,
-        values=logit_diff_head_la.logit_lens_logit_diffs,
-        labels=logit_diff_head_la.labels,
-        plot_type=logit_diff_head_la.plot_type,
-    )
+    # store_values(
+    #     output_attention_path,
+    #     append=True,
+    #     index=logit_diff_head_la.index,
+    #     model=logit_diff_head_la.model.value,
+    #     values=logit_diff_head_la.logit_lens_logit_diffs,
+    #     labels=logit_diff_head_la.labels,
+    #     plot_type=logit_diff_head_la.plot_type,
+    # )
 
-    if visualize_figures:
-        imshow(
-            avg_attention_diffs,
-            labels={"x": "Head", "y": "Layer"},
-            title="Logit Difference From Each Head",
-        )
+    # if visualize_figures:
+    #     imshow(
+    #         avg_attention_diffs,
+    #         labels={"x": "Head", "y": "Layer"},
+    #         title="Logit Difference From Each Head",
+    #     )
 
 
 def main(
@@ -197,7 +206,11 @@ def main(
     torch.set_grad_enabled(False)
     print("Disabled automatic differentiation")
 
+    indexes_to_skip = [6, 12]
+
     for index, row in tqdm(MSR_df.iterrows(), total=MSR_df.shape[0]):
+        if index in indexes_to_skip:
+            continue
         inference(
             model_arg,
             model,
