@@ -17,13 +17,14 @@ if torch.backends.mps.is_available():
     device = "mps"
 else:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
+device = "cpu"
 logger.info("Getting device.", device=device)
 
 
 class Release(str, Enum):
     GPT2_SMALL_RES_JB = "gpt2-small-res-jb"
     GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
+    LLAMA_SCOPE = "llama_scope_lxr_32x"
 
 class SAE_ID(str, Enum):
     BLOCKS_0_HOOK_RESID_PRE = "blocks.0.hook_resid_pre"
@@ -63,7 +64,38 @@ class SAE_ID(str, Enum):
     GENMA_SCOPE_22_WIDTH_16K_CANONICAL= "layer_22/width_16k/canonical"
     GENMA_SCOPE_23_WIDTH_16K_CANONICAL= "layer_23/width_16k/canonical"
     GENMA_SCOPE_24_WIDTH_16K_CANONICAL= "layer_24/width_16k/canonical"
-    
+    LLAMA_SCOPE_0_WIDTH_32k = "l0r_32x"
+    LLAMA_SCOPE_1_WIDTH_32k = "l1r_32x"
+    LLAMA_SCOPE_2_WIDTH_32k = "l2r_32x"
+    LLAMA_SCOPE_3_WIDTH_32k = "l3r_32x"
+    LLAMA_SCOPE_4_WIDTH_32k = "l4r_32x"
+    LLAMA_SCOPE_5_WIDTH_32k = "l5r_32x"
+    LLAMA_SCOPE_6_WIDTH_32k = "l6r_32x"
+    LLAMA_SCOPE_7_WIDTH_32k = "l7r_32x"
+    LLAMA_SCOPE_8_WIDTH_32k = "l8r_32x"
+    LLAMA_SCOPE_9_WIDTH_32k = "l9r_32x"
+    LLAMA_SCOPE_10_WIDTH_32k = "l10r_32x"
+    LLAMA_SCOPE_11_WIDTH_32k = "l11r_32x"
+    LLAMA_SCOPE_12_WIDTH_32k = "l12r_32x"
+    LLAMA_SCOPE_13_WIDTH_32k = "l13r_32x"
+    LLAMA_SCOPE_14_WIDTH_32k = "l14r_32x"
+    LLAMA_SCOPE_15_WIDTH_32k = "l15r_32x"
+    LLAMA_SCOPE_16_WIDTH_32k = "l16r_32x"
+    LLAMA_SCOPE_17_WIDTH_32k = "l17r_32x"
+    LLAMA_SCOPE_18_WIDTH_32k = "l18r_32x"
+    LLAMA_SCOPE_19_WIDTH_32k = "l19r_32x"
+    LLAMA_SCOPE_20_WIDTH_32k = "l20r_32x"
+    LLAMA_SCOPE_21_WIDTH_32k = "l21r_32x"
+    LLAMA_SCOPE_22_WIDTH_32k = "l22r_32x"
+    LLAMA_SCOPE_23_WIDTH_32k = "l23r_32x"
+    LLAMA_SCOPE_24_WIDTH_32k = "l24r_32x"
+    LLAMA_SCOPE_25_WIDTH_32k = "l25r_32x"
+    LLAMA_SCOPE_26_WIDTH_32k = "l26r_32x"
+    LLAMA_SCOPE_27_WIDTH_32k = "l27r_32x"
+    LLAMA_SCOPE_28_WIDTH_32k = "l28r_32x"
+    LLAMA_SCOPE_29_WIDTH_32k = "l29r_32x"
+    LLAMA_SCOPE_30_WIDTH_32k = "l30r_32x"
+    LLAMA_SCOPE_31_WIDTH_32k = "l31r_32x"
 
 
 class CachedComponent(str, Enum):
@@ -105,20 +137,19 @@ def main(
 
 
     for i in trange(len(MSR_df)):
-        
+        import math
+        LIMIT = math.inf
         prompt = [str(MSR_df.iloc[i][after_func_col])]
         tokens = model.to_tokens(prompt, prepend_bos=True)
-        print(tokens.shape)
-        if tokens.shape[1] > 500:
+        if tokens.shape[1] > LIMIT:
+            print("Skiping")
             continue
 
         
         prompt = [str(MSR_df.iloc[i][before_func_col])]
-
-        
         tokens = model.to_tokens(prompt, prepend_bos=True)
-        print(tokens.shape)
-        if tokens.shape[1] > 500:
+        if tokens.shape[1] > LIMIT:
+            print("Skiping")
             continue
 
     
@@ -133,11 +164,6 @@ def main(
 
 
         prompt = [str(MSR_df.iloc[i][after_func_col])]
-        tokens = model.to_tokens(prompt, prepend_bos=True)
-        print(tokens.shape)
-        if tokens.shape[1] > 1100:
-            continue
-
     
         _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
