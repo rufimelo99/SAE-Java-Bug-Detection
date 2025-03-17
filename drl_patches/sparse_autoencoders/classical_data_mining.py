@@ -112,7 +112,7 @@ def main(
     y_pred = clf.predict(X_test)
 
     clas_report = classification_report(y_test, y_pred)
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
     
 
     store_values(
@@ -153,7 +153,7 @@ def main(
     y_pred = clf.predict(X_test)
 
     clas_report = classification_report(y_test, y_pred)
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
 
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
@@ -192,7 +192,7 @@ def main(
 
     clas_report = classification_report(y_test, y_pred)
 
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
 
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
@@ -231,7 +231,7 @@ def main(
     clas_report = classification_report(y_test, y_pred)
 
 
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
 
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
@@ -269,7 +269,7 @@ def main(
 
     clas_report = classification_report(y_test, y_pred)
 
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
 
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
@@ -309,7 +309,7 @@ def main(
 
     clas_report = classification_report(y_test, y_pred)
 
-    logger.info("Classification report:", clas_report)
+    logger.info("Classification report:", precision=clas_report["1"]["precision"], recall=clas_report["1"]["recall"])
 
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
