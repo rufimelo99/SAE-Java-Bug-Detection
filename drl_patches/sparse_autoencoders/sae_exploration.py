@@ -26,6 +26,7 @@ class Release(str, Enum):
     GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
     LLAMA_SCOPE = "llama_scope_lxr_32x"
 
+
 class SAE_ID(str, Enum):
     BLOCKS_0_HOOK_RESID_PRE = "blocks.0.hook_resid_pre"
     BLOCKS_1_HOOK_RESID_PRE = "blocks.1.hook_resid_pre"
@@ -39,31 +40,31 @@ class SAE_ID(str, Enum):
     BLOCKS_9_HOOK_RESID_PRE = "blocks.9.hook_resid_pre"
     BLOCKS_10_HOOK_RESID_PRE = "blocks.10.hook_resid_pre"
     BLOCKS_11_HOOK_RESID_PRE = "blocks.11.hook_resid_pre"
-    GEMMA_SCOPE_0_WIDTH_16K_CANONICAL= "layer_0/width_16k/canonical"
-    GEMMA_SCOPE_1_WIDTH_16K_CANONICAL= "layer_1/width_16k/canonical"
-    GEMMA_SCOPE_2_WIDTH_16K_CANONICAL= "layer_2/width_16k/canonical"
-    GEMMA_SCOPE_3_WIDTH_16K_CANONICAL= "layer_3/width_16k/canonical"
-    GEMMA_SCOPE_4_WIDTH_16K_CANONICAL= "layer_4/width_16k/canonical"
-    GEMMA_SCOPE_5_WIDTH_16K_CANONICAL= "layer_5/width_16k/canonical"
-    GEMMA_SCOPE_6_WIDTH_16K_CANONICAL= "layer_6/width_16k/canonical"
-    GEMMA_SCOPE_7_WIDTH_16K_CANONICAL= "layer_7/width_16k/canonical"
-    GEMMA_SCOPE_8_WIDTH_16K_CANONICAL= "layer_8/width_16k/canonical"
-    GEMMA_SCOPE_9_WIDTH_16K_CANONICAL= "layer_9/width_16k/canonical"
-    GEMMA_SCOPE_10_WIDTH_16K_CANONICAL= "layer_10/width_16k/canonical"
-    GEMMA_SCOPE_11_WIDTH_16K_CANONICAL= "layer_11/width_16k/canonical"
-    GENMA_SCOPE_12_WIDTH_16K_CANONICAL= "layer_12/width_16k/canonical"
-    GENMA_SCOPE_13_WIDTH_16K_CANONICAL= "layer_13/width_16k/canonical"
-    GENMA_SCOPE_14_WIDTH_16K_CANONICAL= "layer_14/width_16k/canonical"
-    GENMA_SCOPE_15_WIDTH_16K_CANONICAL= "layer_15/width_16k/canonical"
-    GENMA_SCOPE_16_WIDTH_16K_CANONICAL= "layer_16/width_16k/canonical"
-    GENMA_SCOPE_17_WIDTH_16K_CANONICAL= "layer_17/width_16k/canonical"
-    GENMA_SCOPE_18_WIDTH_16K_CANONICAL= "layer_18/width_16k/canonical"
-    GENMA_SCOPE_19_WIDTH_16K_CANONICAL= "layer_19/width_16k/canonical"
-    GENMA_SCOPE_20_WIDTH_16K_CANONICAL= "layer_20/width_16k/canonical"
-    GENMA_SCOPE_21_WIDTH_16K_CANONICAL= "layer_21/width_16k/canonical"
-    GENMA_SCOPE_22_WIDTH_16K_CANONICAL= "layer_22/width_16k/canonical"
-    GENMA_SCOPE_23_WIDTH_16K_CANONICAL= "layer_23/width_16k/canonical"
-    GENMA_SCOPE_24_WIDTH_16K_CANONICAL= "layer_24/width_16k/canonical"
+    GEMMA_SCOPE_0_WIDTH_16K_CANONICAL = "layer_0/width_16k/canonical"
+    GEMMA_SCOPE_1_WIDTH_16K_CANONICAL = "layer_1/width_16k/canonical"
+    GEMMA_SCOPE_2_WIDTH_16K_CANONICAL = "layer_2/width_16k/canonical"
+    GEMMA_SCOPE_3_WIDTH_16K_CANONICAL = "layer_3/width_16k/canonical"
+    GEMMA_SCOPE_4_WIDTH_16K_CANONICAL = "layer_4/width_16k/canonical"
+    GEMMA_SCOPE_5_WIDTH_16K_CANONICAL = "layer_5/width_16k/canonical"
+    GEMMA_SCOPE_6_WIDTH_16K_CANONICAL = "layer_6/width_16k/canonical"
+    GEMMA_SCOPE_7_WIDTH_16K_CANONICAL = "layer_7/width_16k/canonical"
+    GEMMA_SCOPE_8_WIDTH_16K_CANONICAL = "layer_8/width_16k/canonical"
+    GEMMA_SCOPE_9_WIDTH_16K_CANONICAL = "layer_9/width_16k/canonical"
+    GEMMA_SCOPE_10_WIDTH_16K_CANONICAL = "layer_10/width_16k/canonical"
+    GEMMA_SCOPE_11_WIDTH_16K_CANONICAL = "layer_11/width_16k/canonical"
+    GENMA_SCOPE_12_WIDTH_16K_CANONICAL = "layer_12/width_16k/canonical"
+    GENMA_SCOPE_13_WIDTH_16K_CANONICAL = "layer_13/width_16k/canonical"
+    GENMA_SCOPE_14_WIDTH_16K_CANONICAL = "layer_14/width_16k/canonical"
+    GENMA_SCOPE_15_WIDTH_16K_CANONICAL = "layer_15/width_16k/canonical"
+    GENMA_SCOPE_16_WIDTH_16K_CANONICAL = "layer_16/width_16k/canonical"
+    GENMA_SCOPE_17_WIDTH_16K_CANONICAL = "layer_17/width_16k/canonical"
+    GENMA_SCOPE_18_WIDTH_16K_CANONICAL = "layer_18/width_16k/canonical"
+    GENMA_SCOPE_19_WIDTH_16K_CANONICAL = "layer_19/width_16k/canonical"
+    GENMA_SCOPE_20_WIDTH_16K_CANONICAL = "layer_20/width_16k/canonical"
+    GENMA_SCOPE_21_WIDTH_16K_CANONICAL = "layer_21/width_16k/canonical"
+    GENMA_SCOPE_22_WIDTH_16K_CANONICAL = "layer_22/width_16k/canonical"
+    GENMA_SCOPE_23_WIDTH_16K_CANONICAL = "layer_23/width_16k/canonical"
+    GENMA_SCOPE_24_WIDTH_16K_CANONICAL = "layer_24/width_16k/canonical"
     LLAMA_SCOPE_0_WIDTH_32k = "l0r_32x"
     LLAMA_SCOPE_1_WIDTH_32k = "l1r_32x"
     LLAMA_SCOPE_2_WIDTH_32k = "l2r_32x"
@@ -102,6 +103,7 @@ class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_sae_acts_post"
     HOOK_RESID_SAE_ACTS_POST = "hook_resid_post.hook_sae_acts_post"
 
+
 @dataclass
 class SAEAnalysis:
     model: AvailableModels
@@ -119,7 +121,7 @@ def main(
     csv_path: str,
     release: str,
     sae_id: str,
-    layer: int, 
+    layer: int,
     cache_component: str,
     output_dir: str,
     before_func_col: str = "func_before",
@@ -135,9 +137,9 @@ def main(
     )
     logger.info("Model loaded")
 
-
     for i in trange(len(MSR_df)):
         import math
+
         LIMIT = math.inf
         prompt = [str(MSR_df.iloc[i][after_func_col])]
         tokens = model.to_tokens(prompt, prepend_bos=True)
@@ -145,38 +147,36 @@ def main(
             print("Skiping")
             continue
 
-        
         prompt = [str(MSR_df.iloc[i][before_func_col])]
         tokens = model.to_tokens(prompt, prepend_bos=True)
         if tokens.shape[1] > LIMIT:
             print("Skiping")
             continue
 
-    
         _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-        
+
         feature_activation_df = pd.DataFrame(
-            cache["blocks" + "." + str(layer) + "."+ cache_component][0, -1, :].cpu().numpy(),
+            cache["blocks" + "." + str(layer) + "." + cache_component][0, -1, :]
+            .cpu()
+            .numpy(),
             index=index,
         )
         feature_activation_df.columns = ["vulnerable"]
 
-
         prompt = [str(MSR_df.iloc[i][after_func_col])]
-    
+
         _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-        
+
         feature_activation_df["secure"] = (
-            cache["blocks" + "." + str(layer) +"." + cache_component][0, -1, :].cpu().numpy()
+            cache["blocks" + "." + str(layer) + "." + cache_component][0, -1, :]
+            .cpu()
+            .numpy()
         )
         feature_activation_df["diff"] = abs(
             feature_activation_df["vulnerable"] - feature_activation_df["secure"]
         )
-
-
-
 
         safe_values = feature_activation_df["secure"].values
         vuln_values = feature_activation_df["vulnerable"].values
@@ -287,18 +287,14 @@ if __name__ == "__main__":
         choices=[c.value for c in list(CachedComponent.__members__.values())],
         default=CachedComponent.HOOK_SAE_ACTS_POST.value,
     )
-    
-    
+
     parser.add_argument(
         "--layer",
         type=int,
         help="The layer to analyse",
     )
 
-
-    parser.add_argument(
-        "--csv_path"
-    )
+    parser.add_argument("--csv_path")
 
     parser.add_argument(
         "--before_func_col",
@@ -327,7 +323,7 @@ if __name__ == "__main__":
         csv_path=args.csv_path,
         release=args.release,
         sae_id=args.sae_id,
-        layer=args.layer, 
+        layer=args.layer,
         cache_component=args.cache_component,
         before_func_col=args.before_func_col,
         after_func_col=args.after_func_col,
