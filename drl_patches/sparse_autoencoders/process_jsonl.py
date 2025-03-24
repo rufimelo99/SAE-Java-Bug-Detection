@@ -4,11 +4,10 @@ import json
 import numpy as np
 import plotly.graph_objects as go
 import torch
-from transformer_lens import HookedTransformer
-
 from drl_patches.logger import logger
 from drl_patches.sparse_autoencoders.schemas import PlotType
 from drl_patches.sparse_autoencoders.utils import imshow, line
+from transformer_lens import HookedTransformer
 
 
 def plot_with_confidence(

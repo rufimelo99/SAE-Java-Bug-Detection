@@ -7,6 +7,9 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 import torch
+from drl_patches.logger import logger
+from drl_patches.sparse_autoencoders.analyse_layers import store_values
+from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier
 
@@ -22,10 +25,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
 from tqdm import tqdm, trange
 from transformers import AutoTokenizer
-
-from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.analyse_layers import store_values
-from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
 
 tqdm.pandas()
 torch.set_grad_enabled(False)
@@ -147,7 +146,7 @@ def main(
 
     param_grid = {
         "C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
-        "max_iter": [10000],
+        "max_iter": [1000],
         "solver": ["newton-cg", "lbfgs"],
     }
 
@@ -171,7 +170,6 @@ def main(
         accuracy=accuracy,
         f1=f1,
     )
-    breakpoint()
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
         append=True,
@@ -183,12 +181,12 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info(
         "Finished grid search.", classifier="LogisticRegression", param_grid=param_grid
     )
-    breakpoint()
     # PCA Regression
 
     pca = PCA()
@@ -198,7 +196,7 @@ def main(
         "pca__n_components": [1, 2, 3, 5, 10, 100, 1000],
         "logistic__C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
         "logistic__max_iter": [1000],
-        "logistic__solver": ["newton-cg", "lbfgs"],
+        "logistic__solver": ["lbfgs"],
     }
 
     logger.info(
@@ -238,6 +236,7 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info(
@@ -250,8 +249,8 @@ def main(
 
     param_grid = {
         "n_neighbors": [1, 2, 3, 5, 10, 100, 1000],
-        "weights": ["uniform", "distance"],
-        "metric": ["euclidean", "manhattan", "minkowski"],
+        "weights": ["distance"],
+        "metric": ["euclidean"],
     }
 
     logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid)
@@ -286,6 +285,7 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid)
@@ -294,7 +294,7 @@ def main(
     param_grid = {
         "n_estimators": [10, 100, 1000],
         "max_features": ["sqrt", "log2"],
-        "max_depth": [10, 100, 1000],
+        "max_depth": [1000],
         "min_samples_split": [2, 10, 100],
         "min_samples_leaf": [1, 10, 100],
     }
@@ -332,6 +332,7 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info(
@@ -342,9 +343,9 @@ def main(
 
     param_grid = {
         "C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
-        "kernel": ["linear", "poly", "rbf", "sigmoid"],
+        "kernel": ["linear", "rbf"],
         "degree": [1, 2, 3, 4, 5],
-        "gamma": ["scale", "auto"],
+        "gamma": ["auto"],
     }
 
     logger.info("Starting grid search.", classifier="SVM", param_grid=param_grid)
@@ -378,6 +379,7 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info("Finished grid search.", classifier="SVM", param_grid=param_grid)
@@ -386,10 +388,10 @@ def main(
 
     param_grid = {
         "hidden_layer_sizes": [(100,), (100, 100), (100, 100, 100)],
-        "activation": ["identity", "logistic", "tanh", "relu"],
-        "solver": ["lbfgs", "sgd", "adam"],
+        "activation": ["tanh", "relu"],
+        "solver": ["adam"],
         "alpha": [0.0001, 0.001, 0.01, 0.1, 1, 10],
-        "learning_rate": ["constant", "invscaling", "adaptive"],
+        "learning_rate": ["constant"],
     }
 
     logger.info(
@@ -426,6 +428,7 @@ def main(
         f1=f1,
         y_pred=y_pred[0].tolist(),
         y_test=y_test[0].tolist(),
+        params=clf.best_params_,
     )
 
     logger.info(
