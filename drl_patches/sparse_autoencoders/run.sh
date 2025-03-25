@@ -17,6 +17,19 @@ echo "Submitting job"
 
 BASE_DIR=/home/u021521/depois-ve-se/drl_patches/sparse_autoencoders
 
+
+# for i in {0..11}; do
+#   python3 sae_exploration.py \
+#       --csv_path artifacts/humaneval.csv \
+#       --layer $i \
+#       --model gpt2-small \
+#       --sae_id blocks.$i.hook_resid_pre \
+#       --release gpt2-small-res-jb \
+#       --cache_component hook_resid_pre.hook_sae_acts_post \
+#       --output_dir $BASE_DIR/gpt2_humaneval/layer$i
+#   python3 vulnerability_detection_features.py --dir-path gpt2_humaneval/layer$i/
+# done
+
 for i in {1..24};
 do
   python sae_exploration.py \

@@ -99,7 +99,7 @@ class SAE_ID(str, Enum):
 
 
 class CachedComponent(str, Enum):
-    HOOK_SAE_ACTS_POST = "hook_sae_acts_post"
+    HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
     HOOK_RESID_SAE_ACTS_POST = "hook_resid_post.hook_sae_acts_post"
 
 
