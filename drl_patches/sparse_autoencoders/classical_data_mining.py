@@ -46,6 +46,33 @@ OUR_STANDARD_TOKENIZER = "meta-llama/Llama-3.1-8B"
 from transformers import AutoTokenizer
 
 
+def get_metrics(y_pred, y_test):
+    # Initialize counts
+    TP = FP = TN = FN = 0
+
+    for pred, actual in zip(y_pred, y_test):
+        if pred == 1 and actual == 1:
+            TP += 1
+        elif pred == 1 and actual == 0:
+            FP += 1
+        elif pred == 0 and actual == 0:
+            TN += 1
+        elif pred == 0 and actual == 1:
+            FN += 1
+
+    # Calculate metrics
+    precision = TP / (TP + FP) if (TP + FP) != 0 else 0
+    recall = TP / (TP + FN) if (TP + FN) != 0 else 0
+    accuracy = (TP + TN) / (TP + FP + TN + FN)
+    f1 = (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) != 0
+        else 0
+    )
+
+    return precision, recall, accuracy, f1
+
+
 def get_training_indexes(diff_df):
     return np.random.choice(diff_df.index, int(len(diff_df) * 0.8), replace=False)
 
@@ -159,10 +186,9 @@ def main(
 
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
+
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
+
     logger.info(
         "Classification report:",
         precision=precision,
@@ -190,33 +216,31 @@ def main(
     # PCA Regression
 
     pca = PCA()
+    clf = LogisticRegression()
     pipe = Pipeline(steps=[("pca", pca), ("logistic", clf)])
 
-    param_grid = {
-        "pca__n_components": [1, 2, 3, 5, 10, 100, 1000],
-        "logistic__C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
+    param_grid_pca = {
+        "pca__n_components": [5, 50, 100, 500],
+        "logistic__C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000],
         "logistic__max_iter": [1000],
-        "logistic__solver": ["lbfgs"],
+        "logistic__solver": ["newton-cg", "lbfgs"],
     }
 
     logger.info(
         "Starting grid search.",
         classifier="PCA + LogisticRegression",
-        param_grid=param_grid,
+        param_grid=param_grid_pca,
     )
 
     clf = GridSearchCV(
-        pipe, param_grid, cv=5, verbose=3
+        pipe, param_grid_pca, cv=5, verbose=3
     )  # Verbose level 3 for detailed output
 
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
 
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
     logger.info(
         "Classification report:",
         precision=precision,
@@ -242,31 +266,28 @@ def main(
     logger.info(
         "Finished grid search.",
         classifier="PCA + LogisticRegression",
-        param_grid=param_grid,
+        param_grid=param_grid_pca,
     )
 
     # KNN
 
-    param_grid = {
+    param_grid_knn = {
         "n_neighbors": [1, 2, 3, 5, 10, 100, 1000],
         "weights": ["distance"],
         "metric": ["euclidean"],
     }
 
-    logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid)
+    logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid_knn)
 
     clf = GridSearchCV(
-        KNeighborsClassifier(), param_grid, cv=5, verbose=3
+        KNeighborsClassifier(), param_grid_knn, cv=5, verbose=3
     )  # Verbose level 3 for detailed output
 
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
 
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
     logger.info(
         "Classification report:",
         precision=precision,
@@ -288,10 +309,10 @@ def main(
         params=clf.best_params_,
     )
 
-    logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid)
+    logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid_knn)
 
     # Random Forest
-    param_grid = {
+    param_grid_rf = {
         "n_estimators": [10, 100, 1000],
         "max_features": ["sqrt", "log2"],
         "max_depth": [1000],
@@ -300,20 +321,17 @@ def main(
     }
 
     logger.info(
-        "Starting grid search.", classifier="RandomForest", param_grid=param_grid
+        "Starting grid search.", classifier="RandomForest", param_grid=param_grid_rf
     )
 
     clf = GridSearchCV(
-        RandomForestClassifier(), param_grid, cv=5, verbose=3
+        RandomForestClassifier(), param_grid_rf, cv=5, verbose=3
     )  # Verbose level 3 for detailed output
 
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
     logger.info(
         "Classification report:",
         precision=precision,
@@ -336,57 +354,54 @@ def main(
     )
 
     logger.info(
-        "Finished grid search.", classifier="RandomForest", param_grid=param_grid
+        "Finished grid search.", classifier="RandomForest", param_grid=param_grid_rf
     )
 
-    # SVM
+    # # SVM
 
-    param_grid = {
-        "C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
-        "kernel": ["linear", "rbf"],
-        "degree": [1, 2, 3, 4, 5],
-        "gamma": ["auto"],
-    }
+    # param_grid_svm = {
+    #     "C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
+    #     "kernel": ["linear", "rbf"],
+    #     "degree": [1, 2, 3, 4, 5],
+    #     "gamma": ["auto"],
+    # }
 
-    logger.info("Starting grid search.", classifier="SVM", param_grid=param_grid)
+    # logger.info("Starting grid search.", classifier="SVM", param_grid=param_grid_svm)
 
-    clf = GridSearchCV(
-        SVC(), param_grid, cv=5, verbose=3
-    )  # Verbose level 3 for detailed output
+    # clf = GridSearchCV(
+    #     SVC(), param_grid_svm, cv=5, verbose=3
+    # )  # Verbose level 3 for detailed output
 
-    clf.fit(X_train, y_train)
+    # clf.fit(X_train, y_train)
 
-    y_pred = clf.predict(X_test)
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
-    logger.info(
-        "Classification report:",
-        precision=precision,
-        recall=recall,
-        accuracy=accuracy,
-        f1=f1,
-    )
-    store_values(
-        os.path.join(output_dir, "classifier_info.jsonl"),
-        append=True,
-        model="SVM",
-        n_features=5000,
-        precision=precision,
-        recall=recall,
-        accuracy=accuracy,
-        f1=f1,
-        y_pred=y_pred[0].tolist(),
-        y_test=y_test[0].tolist(),
-        params=clf.best_params_,
-    )
+    # y_pred = clf.predict(X_test)
+    # precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
+    # logger.info(
+    #     "Classification report:",
+    #     precision=precision,
+    #     recall=recall,
+    #     accuracy=accuracy,
+    #     f1=f1,
+    # )
+    # store_values(
+    #     os.path.join(output_dir, "classifier_info.jsonl"),
+    #     append=True,
+    #     model="SVM",
+    #     n_features=5000,
+    #     precision=precision,
+    #     recall=recall,
+    #     accuracy=accuracy,
+    #     f1=f1,
+    #     y_pred=y_pred[0].tolist(),
+    #     y_test=y_test[0].tolist(),
+    #     params=clf.best_params_,
+    # )
 
-    logger.info("Finished grid search.", classifier="SVM", param_grid=param_grid)
+    # logger.info("Finished grid search.", classifier="SVM", param_grid=param_grid_svm)
 
-    # Neural Network
+    # # Neural Network
 
-    param_grid = {
+    param_grid_nn = {
         "hidden_layer_sizes": [(100,), (100, 100), (100, 100, 100)],
         "activation": ["tanh", "relu"],
         "solver": ["adam"],
@@ -395,21 +410,18 @@ def main(
     }
 
     logger.info(
-        "Starting grid search.", classifier="NeuralNetwork", param_grid=param_grid
+        "Starting grid search.", classifier="NeuralNetwork", param_grid=param_grid_nn
     )
 
     clf = GridSearchCV(
-        MLPClassifier(), param_grid, cv=5, verbose=3
+        MLPClassifier(), param_grid_nn, cv=5, verbose=3
     )  # Verbose level 3 for detailed output
 
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
 
-    precision = sum(y_pred == y_test) / len(y_test)
-    recall = sum(y_pred == y_test) / sum(y_test)
-    accuracy = sum(y_pred == y_test) / len(y_test)
-    f1 = 2 * (precision * recall) / (precision + recall)
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
     logger.info(
         "Classification report:",
         precision=precision,
@@ -432,7 +444,7 @@ def main(
     )
 
     logger.info(
-        "Finished grid search.", classifier="NeuralNetwork", param_grid=param_grid
+        "Finished grid search.", classifier="NeuralNetwork", param_grid=param_grid_nn
     )
 
 
