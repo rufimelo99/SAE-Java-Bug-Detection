@@ -7,6 +7,10 @@ import einops
 import numpy as np
 import pandas as pd
 import torch
+from jaxtyping import Float
+from tqdm import tqdm
+from transformer_lens import HookedTransformer
+
 from drl_patches.logger import logger
 from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
 from drl_patches.sparse_autoencoders.utils import (
@@ -16,9 +20,6 @@ from drl_patches.sparse_autoencoders.utils import (
     scatter,
     visualize_attention_patterns,
 )
-from jaxtyping import Float
-from tqdm import tqdm
-from transformer_lens import HookedTransformer
 
 if torch.backends.mps.is_available():
     DEVICE = "mps"
