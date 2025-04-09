@@ -5,11 +5,12 @@ from enum import Enum
 
 import pandas as pd
 import torch
+from sae_lens import SAE, HookedSAETransformer
+from tqdm import tqdm, trange
+
 from drl_patches.logger import logger
 from drl_patches.sparse_autoencoders.analyse_layers import store_values
 from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
-from sae_lens import SAE, HookedSAETransformer
-from tqdm import tqdm, trange
 
 torch.set_grad_enabled(False)
 if torch.backends.mps.is_available():
