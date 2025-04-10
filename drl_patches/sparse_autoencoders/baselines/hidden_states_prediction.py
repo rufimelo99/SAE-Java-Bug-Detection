@@ -3,67 +3,23 @@ import json
 import os
 import random
 import warnings
-from enum import Enum
 from typing import List
 
 import numpy as np
 import pandas as pd
 import torch
 from drl_patches.logger import logger
-from sklearn import svm
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from drl_patches.sparse_autoencoders.vulnerability_detection_features import (
+    ClassifierType,
+    parameters_map,
+    read_jsonl_file,
+    sk_classifiers_map,
+    store_classifier_info,
+)
 from sklearn.model_selection import GridSearchCV
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
 from tqdm import tqdm, trange
 
 warnings.filterwarnings("ignore")
-
-
-class ClassifierType(str, Enum):
-    LOGISTIC_REGRESSION = "logistic_regression"
-    SVM = "svm"
-    KNN = "knn"
-    DECISION_TREE = "decision_tree"
-    RANDOM_FOREST = "random_forest"
-
-
-sk_classifiers_map = {
-    ClassifierType.LOGISTIC_REGRESSION: LogisticRegression(),
-    ClassifierType.SVM: svm.SVC(),
-    ClassifierType.KNN: KNeighborsClassifier(),
-    ClassifierType.DECISION_TREE: DecisionTreeClassifier(),
-    ClassifierType.RANDOM_FOREST: RandomForestClassifier(),
-}
-
-parameters_map = {
-    ClassifierType.LOGISTIC_REGRESSION: {
-        "C": [0.001, 0.01, 0.1, 1, 10, 100],
-        "max_iter": [100],
-        "solver": ["lbfgs"],
-    },
-    ClassifierType.SVM: {
-        "C": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-        "kernel": ["linear", "poly", "rbf", "sigmoid"],
-    },
-    ClassifierType.KNN: {
-        "n_neighbors": [1, 2, 3, 5, 10, 100, 1000],
-        "weights": ["distance"],
-        "metric": ["euclidean"],
-    },
-    ClassifierType.DECISION_TREE: {
-        "criterion": ["gini"],
-        "splitter": ["best"],
-    },
-    ClassifierType.RANDOM_FOREST: {
-        "n_estimators": [100, 300, 1000],
-        "max_features": ["sqrt", "log2"],
-        "max_depth": [None, 10, 50, 100],
-        "min_samples_split": [2, 5, 10],
-        "min_samples_leaf": [1, 2, 4],
-    },
-}
 
 
 # Set up seeds
@@ -73,29 +29,6 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 torch.backends.cudnn.deterministic = True
 random.seed(seed)
-
-
-def read_jsonl_file(jsonl_path):
-    with open(jsonl_path, "r") as f:
-        for line in f:
-            yield json.loads(line)
-
-
-def get_diff_data(diff_jsonl_path):
-    diff_data = list(read_jsonl_file(diff_jsonl_path))
-    diff_df = pd.DataFrame(diff_data)
-
-    columns = diff_df.columns.to_list()
-    columns.remove("values")
-
-    diff_df.drop(columns=columns, inplace=True)
-
-    for i in trange(len(diff_df["values"][0])):
-        diff_df[f"feature_{i}"] = diff_df["values"].apply(lambda x: x[i])
-
-    diff_df.drop(columns=["values"], inplace=True)
-
-    return diff_df
 
 
 def get_training_indexes(diff_df):
@@ -138,59 +71,31 @@ def get_most_important_features(train_df_diff, n=100):
     return train_df_diff.sum(axis=0).sort_values(ascending=False).index[1 : n + 1]
 
 
-def store_classifier_info(
-    jsonl_path,
-    classifier: ClassifierType,
-    n_features,
-    tp,
-    fp,
-    tn,
-    fn,
-    y_pred,
-    y_test,
-    best_params,
-    directory,
-):
-    with open(jsonl_path, "a") as f:
-        f.write(
-            json.dumps(
-                {
-                    "classifier": classifier.value,
-                    "n_features": n_features,
-                    "tp": tp,
-                    "fp": fp,
-                    "tn": tn,
-                    "fn": fn,
-                    "y_pred": y_pred.tolist(),
-                    "y_test": y_test.tolist(),
-                    "best_params": best_params,
-                    "dataset": directory,
-                }
-            )
-            + "\n"
-        )
-
-
 def train_model(
     df_train,
     df_test,
     top_k_features,
     sk_classifiers: List[ClassifierType],
     directory="artifacts",
+    column="hidden_state",
 ):
 
-    most_important_cols = get_most_important_features(train_df_diff, n=top_k_features)
-
-    X_train = df_train[most_important_cols]
+    X_train = df_train[column]
+    X_train = pd.DataFrame(
+        [np.array(x) for x in X_train], columns=[f"feature_{i}" for i in range(len(X_train[0]))]
+    )
     y_train = df_train["vuln"]
 
-    X_test = df_test[most_important_cols]
+    X_test = df_test[column]
+    X_test = pd.DataFrame(
+        [np.array(x) for x in X_test], columns=[f"feature_{i}" for i in range(len(X_test[0]))]
+    )
     y_test = df_test["vuln"]
 
     for clf in sk_classifiers:
         classifier = sk_classifiers_map[clf]
         classifier = GridSearchCV(
-            classifier, param_grid=parameters_map[clf], cv=5, verbose=0
+            classifier, param_grid=parameters_map[clf], cv=5, verbose=3
         )
 
         classifier.fit(X_train, y_train)
@@ -220,22 +125,34 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dir-path",
         type=str,
-        default="artifacts",
+        default="gpt2_hidden_states_defects/layer0/",
     )
 
     args = parser.parse_args()
 
     logger.info("Reading data.")
-    diff_df = get_diff_data(
-        os.path.join(args.dir_path, "feature_importance_diff.jsonl")
-    )
-    train_indexes = get_training_indexes(diff_df)
-    train_df_diff = diff_df.loc[train_indexes]
 
-    df_train, df_test = get_vuln_safe_data(
-        os.path.join(args.dir_path, "feature_importance_vuln.jsonl"),
-        os.path.join(args.dir_path, "feature_importance_safe.jsonl"),
+    hidden_states_after_df = pd.read_json(
+        os.path.join(args.dir_path, "hidden_states_after.jsonl"),
+        lines=True,
     )
+
+    hidden_states_before_df = pd.read_json(
+        os.path.join(args.dir_path, "hidden_states_before.jsonl"),
+        lines=True,
+    )
+
+    train_indexes = get_training_indexes(hidden_states_after_df)
+    train_df_after = hidden_states_after_df.loc[train_indexes]
+    train_df_before = hidden_states_before_df.loc[train_indexes]
+
+    test_df_after = hidden_states_after_df.drop(train_indexes)
+    test_df_before = hidden_states_before_df.drop(train_indexes)
+
+    df_train = pd.concat([train_df_after, train_df_before])
+    df_test = pd.concat([test_df_after, test_df_before])
+    df_train = df_train.sample(frac=1).reset_index(drop=True)
+    df_test = df_test.sample(frac=1).reset_index(drop=True)
 
     logger.info("Training models.")
     top_k_features = [
