@@ -181,7 +181,7 @@ if __name__ == "__main__":
             [
                 # ClassifierType.LOGISTIC_REGRESSION,
                 # ClassifierType.SVM,
-                # ClassifierType.KNN,
+                #ClassifierType.KNN,
                 # ClassifierType.DECISION_TREE,
                 ClassifierType.RANDOM_FOREST,
             ],
