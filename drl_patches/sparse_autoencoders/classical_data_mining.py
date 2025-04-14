@@ -269,67 +269,24 @@ def main(
     #     param_grid=param_grid_pca,
     # )
 
-    # # KNN
+    # KNN
 
-    # param_grid_knn = {
-    #     "n_neighbors": [1, 2, 3, 5, 10, 100, 1000],
-    #     "weights": ["distance"],
-    #     "metric": ["euclidean"],
-    # }
-
-    # logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid_knn)
-
-    # clf = GridSearchCV(
-    #     KNeighborsClassifier(), param_grid_knn, cv=5, verbose=3
-    # )  # Verbose level 3 for detailed output
-
-    # clf.fit(X_train, y_train)
-
-    # y_pred = clf.predict(X_test)
-
-    # precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
-    # logger.info(
-    #     "Classification report:",
-    #     precision=precision,
-    #     recall=recall,
-    #     accuracy=accuracy,
-    #     f1=f1,
-    # )
-    # store_values(
-    #     os.path.join(output_dir, "classifier_info.jsonl"),
-    #     append=True,
-    #     model="KNN",
-    #     n_features=5000,
-    #     precision=precision,
-    #     recall=recall,
-    #     accuracy=accuracy,
-    #     f1=f1,
-    #     y_pred=y_pred.tolist(),
-    #     y_test=y_test.tolist(),
-    #     params=clf.best_params_,
-    # )
-
-    # logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid_knn)
-
-    # Random Forest
-    param_grid_rf = {
-        "n_estimators": [100, 300, 1000],
-        "max_features": ["sqrt", "log2"],
-        "max_depth": [None, 10, 50, 100],
-        "min_samples_split": [2, 5, 10],
-        "min_samples_leaf": [1, 2, 4],
+    param_grid_knn = {
+        "n_neighbors": [1, 3, 5, 7, 10, 20, 50],
+        "weights": ["uniform", "distance"],
+        "metric": ["euclidean"],
     }
-    logger.info(
-        "Starting grid search.", classifier="RandomForest", param_grid=param_grid_rf
-    )
+
+    logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid_knn)
 
     clf = GridSearchCV(
-        RandomForestClassifier(), param_grid_rf, cv=5, verbose=3
+        KNeighborsClassifier(), param_grid_knn, cv=5, verbose=3
     )  # Verbose level 3 for detailed output
 
     clf.fit(X_train, y_train)
 
     y_pred = clf.predict(X_test)
+
     precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
     logger.info(
         "Classification report:",
@@ -341,7 +298,7 @@ def main(
     store_values(
         os.path.join(output_dir, "classifier_info.jsonl"),
         append=True,
-        model="RandomForest",
+        model="KNN",
         n_features=5000,
         precision=precision,
         recall=recall,
@@ -350,20 +307,63 @@ def main(
         y_pred=y_pred.tolist(),
         y_test=y_test.tolist(),
         params=clf.best_params_,
-        dataset=output_dir,
-    )  
-
-    logger.info(
-        "Finished grid search.", classifier="RandomForest", param_grid=param_grid_rf
+        dataset=csv_path,
     )
 
-    # # SVM
+    # logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid_knn)
+
+    # Random Forest
+    # param_grid_rf = {
+    #     "n_estimators": [100, 300, 1000],
+    #     "max_features": ["sqrt", "log2"],
+    #     "max_depth": [None, 10, 50, 100],
+    #     "min_samples_split": [2, 5, 10],
+    #     "min_samples_leaf": [1, 2, 4],
+    # }
+    # logger.info(
+    #     "Starting grid search.", classifier="RandomForest", param_grid=param_grid_rf
+    # )
+
+    # clf = GridSearchCV(
+    #     RandomForestClassifier(), param_grid_rf, cv=5, verbose=3
+    # )  # Verbose level 3 for detailed output
+
+    # clf.fit(X_train, y_train)
+
+    # y_pred = clf.predict(X_test)
+    # precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
+    # logger.info(
+    #     "Classification report:",
+    #     precision=precision,
+    #     recall=recall,
+    #     accuracy=accuracy,
+    #     f1=f1,
+    # )
+    # store_values(
+    #     os.path.join(output_dir, "classifier_info.jsonl"),
+    #     append=True,
+    #     model="RandomForest",
+    #     n_features=5000,
+    #     precision=precision,
+    #     recall=recall,
+    #     accuracy=accuracy,
+    #     f1=f1,
+    #     y_pred=y_pred.tolist(),
+    #     y_test=y_test.tolist(),
+    #     params=clf.best_params_,
+    #     dataset=csv_path,
+    # )
+
+    # logger.info(
+    #     "Finished grid search.", classifier="RandomForest", param_grid=param_grid_rf
+    # )
+
+    # SVM
 
     # param_grid_svm = {
-    #     "C": [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000],
+    #     "C": [0.001, 0.01, 0.1, 1, 10, 100],
     #     "kernel": ["linear", "rbf"],
-    #     "degree": [1, 2, 3, 4, 5],
-    #     "gamma": ["auto"],
+    #     "gamma": ["scale", 0.01, 0.1, 1],  # only applies to rbf
     # }
 
     # logger.info("Starting grid search.", classifier="SVM", param_grid=param_grid_svm)
