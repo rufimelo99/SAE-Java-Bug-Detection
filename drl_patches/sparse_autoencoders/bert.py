@@ -1,21 +1,11 @@
 import argparse
 import json
-import logging
-import os
 import random
-import sys
-from dataclasses import dataclass
-from enum import Enum
-from typing import Dict, List, Literal
 
 import numpy as np
 import pandas as pd
 import torch
 from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.vulnerability_detection_features import (
-    get_diff_data,
-    get_vuln_safe_data,
-)
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from tqdm import tqdm, trange
 from transformers import (
@@ -41,6 +31,13 @@ class LossLoggerCallback(TrainerCallback):
                 self.train_loss.append((state.global_step, logs["loss"]))
             if "eval_loss" in logs:
                 self.eval_loss.append((state.global_step, logs["eval_loss"]))
+
+
+class DisableWandbCallback(TrainerCallback):
+    def on_init_end(self, args, state, control, **kwargs):
+        import os
+
+        os.environ["WANDB_MODE"] = "disabled"
 
 
 def train_bert_model(dataset_path, training_indices_path):
@@ -158,7 +155,7 @@ def train_bert_model(dataset_path, training_indices_path):
 
     training_args = TrainingArguments(
         output_dir="./results",
-        num_train_epochs=5,
+        num_train_epochs=20,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
         weight_decay=0.01,
@@ -171,6 +168,7 @@ def train_bert_model(dataset_path, training_indices_path):
         logging_steps=10,
     )
     loss_logger = LossLoggerCallback()
+    disable_wandb = DisableWandbCallback()
 
     trainer = Trainer(
         model=model,
@@ -178,7 +176,7 @@ def train_bert_model(dataset_path, training_indices_path):
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
         compute_metrics=compute_metrics,
-        callbacks=[loss_logger],
+        callbacks=[loss_logger, disable_wandb],
     )
 
     logger.info("Starting training...")
@@ -199,6 +197,31 @@ def train_bert_model(dataset_path, training_indices_path):
     eval_loss_df.to_csv(
         f"{dataset_path}_eval_losses.csv".replace("/", "_"), index=False
     )
+
+    # Get the best model and save it
+    best_model = trainer.model
+    best_model.save_pretrained(
+        f"{dataset_path}_best_model".replace("/", "_")
+    )  # Save the model
+    tokenizer.save_pretrained(
+        f"{dataset_path}_best_model".replace("/", "_")
+    )  # Save the tokenizer
+
+    # Evaluate again with the best model
+    trainer = Trainer(
+        model=best_model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=test_dataset,
+        compute_metrics=compute_metrics,
+        callbacks=[loss_logger, disable_wandb],
+    )
+    logger.info("Starting evaluation...")
+    evaluation = trainer.evaluate()
+    logger.info("Evaluation completed", evaluation=evaluation)
+    # Save the evaluation results
+    eval_df = pd.DataFrame([evaluation], columns=evaluation.keys())
+    eval_df.to_csv(f"{dataset_path}_eval_results.csv".replace("/", "_"), index=False)
 
 
 def compute_metrics(eval_pred):
