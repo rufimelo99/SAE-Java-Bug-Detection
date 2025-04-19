@@ -40,9 +40,10 @@ class DisableWandbCallback(TrainerCallback):
         os.environ["WANDB_MODE"] = "disabled"
 
 
-def train_bert_model(dataset_path, training_indices_path):
+def train_bert_model(dataset_path, training_indices_path, model_name):
     logger.info("Training BERT model", dataset_path=dataset_path)
-    MODEL_NAME = "microsoft/graphcodebert-base"
+    MODEL_NAME = model_name
+    logger.info("Model name", model_name=MODEL_NAME)
 
     logger.info("Reading data.")
 
@@ -263,10 +264,23 @@ if __name__ == "__main__":
         default="artifacts/gbug-java_train_indexes.json",
         help="json file with the training indices",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="answerdotai/ModernBERT-base",
+        help="model name",
+        choices=[
+            "microsoft/graphcodebert-base",
+            "answerdotai/ModernBERT-base",
+            "answerdotai/ModernBERT-large",
+        ],
+    )
 
     args = parser.parse_args()
 
     # Load the dataset
     dataset_path = args.dataset
     training_indices_path = args.training_indices
-    train_bert_model(dataset_path, training_indices_path)
+    # Load the model
+    model_name = args.model
+    train_bert_model(dataset_path, training_indices_path, model_name)
