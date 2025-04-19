@@ -82,13 +82,15 @@ def train_model(
 
     X_train = df_train[column]
     X_train = pd.DataFrame(
-        [np.array(x) for x in X_train], columns=[f"feature_{i}" for i in range(len(X_train[0]))]
+        [np.array(x) for x in X_train],
+        columns=[f"feature_{i}" for i in range(len(X_train[0]))],
     )
     y_train = df_train["vuln"]
 
     X_test = df_test[column]
     X_test = pd.DataFrame(
-        [np.array(x) for x in X_test], columns=[f"feature_{i}" for i in range(len(X_test[0]))]
+        [np.array(x) for x in X_test],
+        columns=[f"feature_{i}" for i in range(len(X_test[0]))],
     )
     y_test = df_test["vuln"]
 
@@ -181,7 +183,7 @@ if __name__ == "__main__":
             [
                 # ClassifierType.LOGISTIC_REGRESSION,
                 # ClassifierType.SVM,
-                #ClassifierType.KNN,
+                # ClassifierType.KNN,
                 # ClassifierType.DECISION_TREE,
                 ClassifierType.RANDOM_FOREST,
             ],

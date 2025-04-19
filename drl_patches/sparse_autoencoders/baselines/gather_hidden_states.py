@@ -137,10 +137,13 @@ def main(model_name: str, csv_path: str, output_dir: str):
                 )
 
             # Compute the diff between the two hidden states
-            for hidden_state_idx, (hidden_state_before, hidden_state_after) in enumerate(
-                zip(hidden_states_before, hidden_states_after)
-            ):
-                hidden_state_before = einsum("batch seq dim -> dim", hidden_state_before)
+            for hidden_state_idx, (
+                hidden_state_before,
+                hidden_state_after,
+            ) in enumerate(zip(hidden_states_before, hidden_states_after)):
+                hidden_state_before = einsum(
+                    "batch seq dim -> dim", hidden_state_before
+                )
                 hidden_state_after = einsum("batch seq dim -> dim", hidden_state_after)
 
                 # Compute the diff
