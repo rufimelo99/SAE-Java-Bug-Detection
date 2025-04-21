@@ -26,6 +26,8 @@ run_pipeline() {
     csv_path=$2
     train_indexes=$3
 
+    echo "Running pipeline for $dataset from $csv_path with train indexes $train_indexes"
+
     for i in {0..11}; do
         output_dir=$BASE_DIR/gpt2_${dataset}/layer$i
         python3 sae_exploration.py \
@@ -45,8 +47,11 @@ run_pipeline() {
 }
 
 # Run for each dataset
+echo "Running pipeline for gbug-java"
 run_pipeline "gbug-java" "artifacts/gbug-java.csv" "artifacts/gbug-java_train_indexes.json"
+echo "Running pipeline for defects4j"
 run_pipeline "defects4j" "artifacts/defects4j.csv" "artifacts/defects4j_train_indexes.json"
+echo "Running pipeline for humaneval"
 run_pipeline "humaneval" "artifacts/humaneval.csv" "artifacts/humaneval_train_indexes.json"
 
 
