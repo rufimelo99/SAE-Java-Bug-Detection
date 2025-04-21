@@ -213,10 +213,10 @@ def train_bert_model(dataset_path, training_indices_path, model_name):
     # Get the best model and save it
     best_model = trainer.model
     best_model.save_pretrained(
-        f"{dataset_path}_best_model".replace("/", "_")
+        f"{MODEL_NAME}_{dataset_path}_best_model".replace("/", "_")
     )  # Save the model
     tokenizer.save_pretrained(
-        f"{dataset_path}_best_model".replace("/", "_")
+        f"{MODEL_NAME}_{dataset_path}_best_model".replace("/", "_")
     )  # Save the tokenizer
 
     # Evaluate again with the best model
