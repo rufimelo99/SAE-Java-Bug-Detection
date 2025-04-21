@@ -20,6 +20,13 @@ torch.backends.cudnn.deterministic = True
 random.seed(seed)
 
 
+def load_training_indexes(config_path: str) -> List[int]:
+    # Loads the training indexes from a jsonl file.
+    with open(config_path, "r") as f:
+        training_indexes = json.load(f)
+    return training_indexes
+
+
 def get_training_indexes(diff_df):
     return np.random.choice(diff_df.index, int(len(diff_df) * 0.8), replace=False)
 

@@ -1,6 +1,8 @@
 import json
+import random
 from typing import List, Optional, Union
 
+import numpy as np
 import plotly.express as px
 import torch
 import transformer_lens.utils as utils
@@ -112,3 +114,15 @@ def read_jsonl_file(jsonl_path):
     with open(jsonl_path, "r") as f:
         for line in f:
             yield json.loads(line)
+
+
+def set_seed(seed: int = 42):
+    """
+    Set the random seed for reproducibility.
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
