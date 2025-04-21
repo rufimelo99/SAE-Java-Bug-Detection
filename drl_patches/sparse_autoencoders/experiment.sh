@@ -55,6 +55,35 @@ echo "Running pipeline for humaneval"
 run_pipeline "humaneval" "artifacts/humaneval.csv" "artifacts/humaneval_train_indexes.json"
 
 
+run_bert_pipeline() {
+    model=$1
+
+    echo "Running pipeline for $model"
+
+    python bert.py  \
+        --dataset artifacts/gbug-java.csv  \
+        --training_indices artifacts/gbug-java_train_indexes.json \
+        --model $model
+
+    python bert.py  \
+        --dataset artifacts/defects4j.csv  \
+        --training_indices artifacts/defects4j_train_indexes.json \
+        --model $model
+
+    python bert.py  \
+        --dataset artifacts/humaneval.csv  \
+        --training_indices artifacts/humaneval_train_indexes.json \
+        --model $model
+}
+
+# Run for each dataset
+run_bert_pipeline "microsoft/graphcodebert-base"
+run_bert_pipeline "answerdotai/ModernBERT-base"
+run_bert_pipeline "answerdotai/ModernBERT-large"
+
+
+
+
 python baselines/gather_hidden_states.py --csv_path artifacts/gbug-java.csv --output_dir gemma2_hidden_states_gbug-java --model_name google/gemma-2-2b
 python baselines/gather_hidden_states.py --csv_path artifacts/defects4j.csv --output_dir gemma2_hidden_states_defects --model_name google/gemma-2-2b
 python baselines/gather_hidden_states.py --csv_path artifacts/humaneval.csv --output_dir gemma2_hidden_states_humaneval --model_name google/gemma-2-2b
