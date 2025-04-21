@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from drl_patches.logger import logger
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
 from tqdm import tqdm, trange
 from transformers import (
     AutoModelForSequenceClassification,
@@ -145,6 +145,14 @@ def train_bert_model(dataset_path, training_indices_path, model_name):
         def __len__(self):
             return len(self.labels)
 
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=1)
+        f1 = f1_score(
+            labels, predictions, average="weighted"
+        )  # or "macro"/"micro" depending on your task
+        return {"f1": f1}
+
     train_dataset = CodeDataset(train_encodings, train_labels)
     test_dataset = CodeDataset(test_encodings, test_labels)
 
@@ -164,10 +172,13 @@ def train_bert_model(dataset_path, training_indices_path, model_name):
         load_best_model_at_end=True,
         learning_rate=2e-5,
         optim="adamw_torch",
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         save_strategy="epoch",
         logging_steps=10,
+        metric_for_best_model="f1",  # <---- this tells Trainer what metric to track
+        greater_is_better=True,  # <---- F1 is a score where higher is better
     )
+
     loss_logger = LossLoggerCallback()
     disable_wandb = DisableWandbCallback()
 
