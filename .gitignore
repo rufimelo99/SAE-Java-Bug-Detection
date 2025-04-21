@@ -163,3 +163,11 @@ cython_debug/
 /drl_patches/sparse_autoencoders/gbug-java
 /drl_patches/sparse_autoencoders/baselines/modern_bert_model
 /drl_patches/sparse_autoencoders/transferability/models/*.pt
+*.pt
+
+/drl_patches/sparse_autoencoders/microsoft_graphcodebert-base_artifacts_gbug-java.csv_best_model
+/drl_patches/sparse_autoencoders/microsoft_graphcodebert-base_artifacts_defects4j.csv_best_model
+/drl_patches/sparse_autoencoders/microsoft_graphcodebert-base_artifacts_humaneval.csv_best_model
+/drl_patches/sparse_autoencoders/answerdotai_ModernBERT-base_artifacts_gbug-java.csv_best_model
+/drl_patches/sparse_autoencoders/answerdotai_ModernBERT-base_artifacts_defects4j.csv_best_model
+/drl_patches/sparse_autoencoders/answerdotai_ModernBERT-base_artifacts_humaneval.csv_best_model
