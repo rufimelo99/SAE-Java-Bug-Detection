@@ -16,6 +16,7 @@ source activate /home/u021521/anaconda3/envs/myenv/
 echo "Submitting job"
 
 
+echo "Getting experiment config. Gettig train indexes"
 python getting_experiment_config.py --csv_path artifacts/gbug-java.csv --output_path artifacts/gbug-java_train_indexes.json
 python getting_experiment_config.py --csv_path artifacts/defects4j.csv --output_path artifacts/defects4j_train_indexes.json
 python getting_experiment_config.py --csv_path artifacts/humaneval.csv --output_path artifacts/humaneval_train_indexes.json
