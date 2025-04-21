@@ -20,3 +20,36 @@ echo "Getting experiment config. Gettig train indexes"
 python getting_experiment_config.py --csv_path artifacts/gbug-java.csv --output_path artifacts/gbug-java_train_indexes.json
 python getting_experiment_config.py --csv_path artifacts/defects4j.csv --output_path artifacts/defects4j_train_indexes.json
 python getting_experiment_config.py --csv_path artifacts/humaneval.csv --output_path artifacts/humaneval_train_indexes.json
+
+run_pipeline() {
+    dataset=$1
+    csv_path=$2
+    train_indexes=$3
+
+    for i in {0..11}; do
+        output_dir=$BASE_DIR/gpt2_${dataset}/layer$i
+        python3 sae_exploration.py \
+            --csv_path $csv_path \
+            --layer $i \
+            --model gpt2-small \
+            --sae_id blocks.$i.hook_resid_pre \
+            --release gpt2-small-res-jb \
+            --cache_component hook_resid_pre.hook_sae_acts_post \
+            --output_dir $output_dir
+
+        python3 vulnerability_detection_features.py \
+            --dir-path gpt2_${dataset}/layer$i/ \
+            --train-indexes_path $train_indexes \
+            --save-model
+    done
+}
+
+# Run for each dataset
+run_pipeline "gbug-java" "artifacts/gbug-java.csv" "artifacts/gbug-java_train_indexes.json"
+run_pipeline "defects4j" "artifacts/defects4j.csv" "artifacts/defects4j_train_indexes.json"
+run_pipeline "humaneval" "artifacts/humaneval.csv" "artifacts/humaneval_train_indexes.json"
+
+
+python baselines/gather_hidden_states.py --csv_path artifacts/gbug-java.csv --output_dir gemma2_hidden_states_gbug-java --model_name google/gemma-2-2b
+python baselines/gather_hidden_states.py --csv_path artifacts/defects4j.csv --output_dir gemma2_hidden_states_defects --model_name google/gemma-2-2b
+python baselines/gather_hidden_states.py --csv_path artifacts/humaneval.csv --output_dir gemma2_hidden_states_humaneval --model_name google/gemma-2-2b
