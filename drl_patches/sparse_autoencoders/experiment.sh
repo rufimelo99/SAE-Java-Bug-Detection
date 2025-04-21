@@ -87,3 +87,10 @@ run_bert_pipeline "answerdotai/ModernBERT-large"
 python baselines/gather_hidden_states.py --csv_path artifacts/gbug-java.csv --output_dir gemma2_hidden_states_gbug-java --model_name google/gemma-2-2b
 python baselines/gather_hidden_states.py --csv_path artifacts/defects4j.csv --output_dir gemma2_hidden_states_defects --model_name google/gemma-2-2b
 python baselines/gather_hidden_states.py --csv_path artifacts/humaneval.csv --output_dir gemma2_hidden_states_humaneval --model_name google/gemma-2-2b
+
+
+# Baselines
+# Getting the vectorizer
+echo "Getting the vectorizer"
+python get_vectorizer.py --csvs artifacts/gbug-java.csv artifacts/humaneval.csv artifacts/defects4j.csv --output_dir artifacts/
+python classical_data_mining.py --csv_path artifacts/defects4j.csv --output_dir ole --train-indexes_path artifacts/defects4j_train_indexes.json  --vectorizer_path artifacts/vectorizer.pkl

@@ -1,30 +1,24 @@
 import argparse
 import os
-import random
-from dataclasses import dataclass
-from enum import Enum
+import pickle
 
-import numpy as np
 import pandas as pd
 import torch
 from drl_patches.logger import logger
 from drl_patches.sparse_autoencoders.analyse_layers import store_values
-from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
-from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
-
-# Classical logistic regression
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-
-# Do grid search
+from drl_patches.sparse_autoencoders.get_vectorizer import load_tfidf_vectorizer
+from drl_patches.sparse_autoencoders.getting_experiment_config import (
+    load_training_indexes,
+)
+from drl_patches.sparse_autoencoders.schemas import AvailableModels
+from drl_patches.sparse_autoencoders.utils import set_seed
+from drl_patches.sparse_autoencoders.vulnerability_detection_features import (
+    ClassifierType,
+    parameters_map,
+    sk_classifiers_map,
+)
 from sklearn.model_selection import GridSearchCV
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC
-from tqdm import tqdm, trange
-from transformers import AutoTokenizer
+from tqdm import tqdm
 
 tqdm.pandas()
 torch.set_grad_enabled(False)
@@ -34,16 +28,7 @@ else:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 device = "cpu"
 logger.info("Getting device.", device=device)
-# Set up seeds
-seed = 42
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-torch.backends.cudnn.deterministic = True
-random.seed(seed)
-
-OUR_STANDARD_TOKENIZER = "meta-llama/Llama-3.1-8B"
-from transformers import AutoTokenizer
+set_seed(42)
 
 
 def get_metrics(y_pred, y_test):
@@ -73,46 +58,42 @@ def get_metrics(y_pred, y_test):
     return precision, recall, accuracy, f1
 
 
-def get_training_indexes(diff_df):
-    return np.random.choice(diff_df.index, int(len(diff_df) * 0.8), replace=False)
-
-
 def main(
     csv_path: str,
+    vectorizer_path: str,
     output_dir: str,
     before_func_col: str = "func_before",
     after_func_col: str = "func_after",
+    train_indexes_path: str = "artifacts/gbug-java_train_indexes.json",
 ):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    tokenizer = AutoTokenizer.from_pretrained(OUR_STANDARD_TOKENIZER)
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.pad_token_id = tokenizer.eos_token_id
+
     # Load the data
     df = pd.read_csv(csv_path)
+    vectorizer = load_tfidf_vectorizer(vectorizer_path)
+    logger.info("Vectorizer loaded.")
+
     logger.info("Data loaded.")
 
-    df["tokenized_before"] = df["func_before"].progress_apply(
-        lambda x: tokenizer(
-            x,
-            return_tensors="pt",
-            padding="max_length",
-            truncation=True,
-            max_length=5000,
-        )["input_ids"]
+    df["tokenized_before"] = df[before_func_col].progress_apply(
+        lambda x: vectorizer.transform([x]).toarray()[0]
     )
-    df["tokenized_after"] = df["func_after"].progress_apply(
-        lambda x: tokenizer(
-            x,
-            return_tensors="pt",
-            padding="max_length",
-            truncation=True,
-            max_length=5000,
-        )["input_ids"]
+    df["tokenized_after"] = df[after_func_col].progress_apply(
+        lambda x: vectorizer.transform([x]).toarray()[0]
+    )
+    # Pad to 5000 tokens
+    df["tokenized_before"] = df["tokenized_before"].apply(
+        lambda x: x[:5000] + [0] * (5000 - len(x)) if len(x) < 5000 else x[:5000]
+    )
+    df["tokenized_after"] = df["tokenized_after"].apply(
+        lambda x: x[:5000] + [0] * (5000 - len(x)) if len(x) < 5000 else x[:5000]
     )
 
-    train_indexes = get_training_indexes(df)
+    logger.info("Tokenization done.")
+
+    train_indexes = load_training_indexes(train_indexes_path)
     df_train = df.loc[train_indexes]
     df_test = df.drop(train_indexes)
 
@@ -124,7 +105,7 @@ def main(
             [
                 df_classical_train,
                 pd.DataFrame(
-                    {"tokens": row["tokenized_before"].tolist(), "vuln": 1}, index=[0]
+                    {"tokens": [row["tokenized_before"].tolist()], "vuln": 1}, index=[0]
                 ),
             ]
         )
@@ -132,7 +113,7 @@ def main(
             [
                 df_classical_train,
                 pd.DataFrame(
-                    {"tokens": row["tokenized_after"].tolist(), "vuln": 0}, index=[0]
+                    {"tokens": [row["tokenized_after"].tolist()], "vuln": 0}, index=[0]
                 ),
             ]
         )
@@ -143,7 +124,7 @@ def main(
             [
                 df_classical_test,
                 pd.DataFrame(
-                    {"tokens": row["tokenized_before"].tolist(), "vuln": 1}, index=[0]
+                    {"tokens": [row["tokenized_before"].tolist()], "vuln": 1}, index=[0]
                 ),
             ]
         )
@@ -151,7 +132,7 @@ def main(
             [
                 df_classical_test,
                 pd.DataFrame(
-                    {"tokens": row["tokenized_after"].tolist(), "vuln": 0}, index=[0]
+                    {"tokens": [row["tokenized_after"].tolist()], "vuln": 0}, index=[0]
                 ),
             ]
         )
@@ -172,18 +153,16 @@ def main(
     y_test = df_classical_test["vuln"]
 
     # KNN
+    model = ClassifierType.KNN
 
-    param_grid_knn = {
-        "n_neighbors": [1, 3, 5, 7, 10, 20, 50],
-        "weights": ["uniform", "distance"],
-        "metric": ["euclidean"],
-    }
-
-    logger.info("Starting grid search.", classifier="KNN", param_grid=param_grid_knn)
-
+    logger.warning("Limiting n_jobs to 2 to avoid memory issues in the cluster.")
     clf = GridSearchCV(
-        KNeighborsClassifier(), param_grid_knn, cv=5, verbose=3
-    )  # Verbose level 3 for detailed output
+        sk_classifiers_map[model],
+        parameters_map[model],
+        cv=5,
+        verbose=2,
+        n_jobs=2,
+    )
 
     clf.fit(X_train, y_train)
 
@@ -211,54 +190,52 @@ def main(
         params=clf.best_params_,
         dataset=csv_path,
     )
-
-    # logger.info("Finished grid search.", classifier="KNN", param_grid=param_grid_knn)
+    # Save the model
+    model_name = f"{model.value}_k_{5000}.pt"
+    with open(os.path.join(output_dir, model_name), "wb") as f:
+        pickle.dump(clf, f)
+    logger.info("Model saved.", model_name=model_name, output_dir=output_dir)
 
     # Random Forest
-    # param_grid_rf = {
-    #     "n_estimators": [100, 300, 1000],
-    #     "max_features": ["sqrt", "log2"],
-    #     "max_depth": [None, 10, 50, 100],
-    #     "min_samples_split": [2, 5, 10],
-    #     "min_samples_leaf": [1, 2, 4],
-    # }
-    # logger.info(
-    #     "Starting grid search.", classifier="RandomForest", param_grid=param_grid_rf
-    # )
+    model = ClassifierType.RANDOM_FOREST
+    logger.warning("Limiting n_jobs to 2 to avoid memory issues in the cluster.")
+    clf = GridSearchCV(
+        sk_classifiers_map[model],
+        parameters_map[model],
+        cv=5,
+        verbose=2,
+        n_jobs=2,
+    )
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
+    logger.info(
+        "Classification report:",
+        precision=precision,
+        recall=recall,
+        accuracy=accuracy,
+        f1=f1,
+    )
+    store_values(
+        os.path.join(output_dir, "classifier_info.jsonl"),
+        append=True,
+        model="RandomForest",
+        n_features=5000,
+        precision=precision,
+        recall=recall,
+        accuracy=accuracy,
+        f1=f1,
+        y_pred=y_pred.tolist(),
+        y_test=y_test.tolist(),
+        params=clf.best_params_,
+        dataset=csv_path,
+    )
 
-    # clf = GridSearchCV(
-    #     RandomForestClassifier(), param_grid_rf, cv=5, verbose=3
-    # )  # Verbose level 3 for detailed output
-
-    # clf.fit(X_train, y_train)
-
-    # y_pred = clf.predict(X_test)
-    # precision, recall, accuracy, f1 = get_metrics(y_pred, y_test)
-    # logger.info(
-    #     "Classification report:",
-    #     precision=precision,
-    #     recall=recall,
-    #     accuracy=accuracy,
-    #     f1=f1,
-    # )
-    # store_values(
-    #     os.path.join(output_dir, "classifier_info.jsonl"),
-    #     append=True,
-    #     model="RandomForest",
-    #     n_features=5000,
-    #     precision=precision,
-    #     recall=recall,
-    #     accuracy=accuracy,
-    #     f1=f1,
-    #     y_pred=y_pred.tolist(),
-    #     y_test=y_test.tolist(),
-    #     params=clf.best_params_,
-    #     dataset=csv_path,
-    # )
-
-    # logger.info(
-    #     "Finished grid search.", classifier="RandomForest", param_grid=param_grid_rf
-    # )
+    # Save the model
+    model_name = f"{model.value}_k_{5000}.pt"
+    with open(os.path.join(output_dir, model_name), "wb") as f:
+        pickle.dump(clf, f)
+    logger.info("Model saved.", model_name=model_name, output_dir=output_dir)
 
 
 if __name__ == "__main__":
@@ -268,6 +245,13 @@ if __name__ == "__main__":
     ]
 
     parser.add_argument("--csv_path")
+
+    parser.add_argument(
+        "--vectorizer_path",
+        type=str,
+        default="artifacts/vectorizer.pkl",
+        help="The path to the vectorizer file",
+    )
 
     parser.add_argument(
         "--before_func_col",
@@ -284,6 +268,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--train-indexes_path",
+        type=str,
+        default="artifacts/gbug-java_train_indexes.json",
+    )
+
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="artifacts",
@@ -293,7 +283,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(
         args.csv_path,
+        args.vectorizer_path,
         args.output_dir,
         args.before_func_col,
         args.after_func_col,
+        args.train_indexes_path,
     )
