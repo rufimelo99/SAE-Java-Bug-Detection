@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional, Union
 
 import plotly.express as px
@@ -105,3 +106,9 @@ def visualize_attention_patterns(
 
     # Return the visualisation as raw code
     return f"<div style='max-width: {str(max_width)}px;'>{title_html + plot}</div>"
+
+
+def read_jsonl_file(jsonl_path):
+    with open(jsonl_path, "r") as f:
+        for line in f:
+            yield json.loads(line)
