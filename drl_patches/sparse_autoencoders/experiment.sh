@@ -39,6 +39,10 @@ run_pipeline() {
             --cache_component hook_resid_pre.hook_sae_acts_post \
             --output_dir $output_dir
 
+        python3 getting_sorted_layer_features.py \
+            --dir-path gpt2_${dataset}/layer$i/ \
+            --train-indexes_path $train_indexes
+
         python3 vulnerability_detection_features.py \
             --dir-path gpt2_${dataset}/layer$i/ \
             --train-indexes_path $train_indexes \
@@ -74,6 +78,9 @@ run_gemma2b_pipeline() {
             --cache_component hook_resid_post.hook_sae_acts_post \
             --output_dir $BASE_DIR/gbug-java/layer$i
 
+        python3 getting_sorted_layer_features.py \
+            --dir-path gemma2_${dataset}/layer$i/ \
+            --train-indexes_path $train_indexes
 
         python3 vulnerability_detection_features.py \
             --dir-path gemma2_${dataset}/layer$i/ \
