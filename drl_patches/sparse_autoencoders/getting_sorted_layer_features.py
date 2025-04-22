@@ -35,7 +35,7 @@ def get_diff_data(diff_jsonl_path):
 
 
 def sort_features(train_df_diff):
-    return list(train_df_diff.sum(axis=0).sort_values(ascending=False))
+    return list(train_df_diff.sum(axis=0).sort_values(ascending=False).index)
 
 
 def load_sorted_features(config_path: str):
