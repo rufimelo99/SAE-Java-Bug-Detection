@@ -134,13 +134,6 @@ run_bert_pipeline() {
         --model $model
 }
 
-# Run for each dataset
-run_bert_pipeline "microsoft/graphcodebert-base"
-run_bert_pipeline "answerdotai/ModernBERT-base"
-run_bert_pipeline "answerdotai/ModernBERT-large"
-
-
-
 run_hidden_states_pipeline() {
     model=$1
     csv_path=$2
@@ -165,30 +158,59 @@ run_hidden_states_pipeline google/gemma-2-2b artifacts/defects4j.csv gemma2_hidd
 run_hidden_states_pipeline google/gemma-2-2b artifacts/humaneval.csv gemma2_hidden_states_humaneval
 
 
-run_gpt2_hidden_states_prediction_pipeline() {
-    train_indexes=$1
-    dataset=$2
 
-    echo "Running gpt2 hidden states pipeline for $dataset, with $train_indexes"
+run_hidden_states_prediction_pipeline() {
+    local model_prefix=$1     # e.g., "gpt2" or "gemma2"
+    local layers=$2           # number of layers, e.g., 12 for GPT-2, 25 for Gemma2
+    local train_indexes=$3    # path to train index file
+    local dataset=$4          # dataset name
 
-    for i in {0..11}; do
-        output_dir=$BASE_DIR/gpt2_${dataset}/layer$i
-        
+    echo "Running $model_prefix hidden states pipeline for $dataset, with $train_indexes"
+
+    for ((i = 0; i < layers; i++)); do
+        output_dir=$BASE_DIR/${model_prefix}_hidden_states_${dataset}/layer$i
+
+        python3 getting_sorted_layer_features.py \
+            --dir-path ${model_prefix}_hidden_states_${dataset}/layer$i/ \
+            --train-indexes_path $train_indexes
+
         python3 vulnerability_detection_features.py \
-                --dir-path gpt2_hidden_states_${dataset}/layer$i/ \
-                --train-indexes_path $train_indexes \
-                --save-model
+            --dir-path ${model_prefix}_hidden_states_${dataset}/layer$i/ \
+            --train-indexes_path $train_indexes \
+            --save-model
     done
 }
 
-run_gpt2_hidden_states_prediction_pipeline "artifacts/gbug-java_train_indexes.json" "gbug-java"
-run_gpt2_hidden_states_prediction_pipeline "artifacts/defects4j_train_indexes.json" "defects4j"
-run_gpt2_hidden_states_prediction_pipeline "artifacts/humaneval_train_indexes.json" "humaneval"
+# Define datasets and their training index files
+declare -A datasets
+datasets=(
+    ["gbug-java"]="artifacts/gbug-java_train_indexes.json"
+    ["defects4j"]="artifacts/defects4j_train_indexes.json"
+    ["humaneval"]="artifacts/humaneval_train_indexes.json"
+)
 
+# Run for GPT-2 (12 layers)
+for dataset in "${!datasets[@]}"; do
+    run_hidden_states_prediction_pipeline "gpt2" 12 "${datasets[$dataset]}" "$dataset"
+done
+
+# Run for Gemma2B (25 layers)
+for dataset in "${!datasets[@]}"; do
+    run_hidden_states_prediction_pipeline "gemma2" 25 "${datasets[$dataset]}" "$dataset"
+done
 
 
 
 # Baselines
+
+
+# Run for each dataset
+run_bert_pipeline "microsoft/graphcodebert-base"
+run_bert_pipeline "answerdotai/ModernBERT-base"
+run_bert_pipeline "answerdotai/ModernBERT-large"
+
+
+
 # Getting the vectorizer
 echo "Getting the vectorizer"
 python get_vectorizer.py --csvs artifacts/gbug-java.csv artifacts/humaneval.csv artifacts/defects4j.csv --output_dir artifacts/
