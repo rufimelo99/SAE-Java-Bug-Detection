@@ -4,9 +4,9 @@ import json
 import numpy as np
 import plotly.graph_objects as go
 import torch
-from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.schemas import PlotType
-from drl_patches.sparse_autoencoders.utils import imshow, line
+from sae_java_bug.logger import logger
+from sae_java_bug.sparse_autoencoders.schemas import PlotType
+from sae_java_bug.sparse_autoencoders.utils import imshow, line
 from transformer_lens import HookedTransformer
 
 

@@ -1,5 +1,5 @@
-# DRL_Patches
- When Deep Reinforcment Learning helps creating vulnerability patches
+# sae-java-bug-detection
+Replication package for the paper:[Are Sparse Autoencoders Useful for Java Function Bug Detection?](https://arxiv.org/abs/2505.10375).
 
 ## Installation
 

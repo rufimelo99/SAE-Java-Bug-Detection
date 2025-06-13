@@ -6,7 +6,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from drl_patches.logger import logger
+from sae_java_bug.logger import logger
 from fancy_einsum import einsum
 from tqdm import tqdm
 from transformers import AutoModelForSequenceClassification, AutoTokenizer

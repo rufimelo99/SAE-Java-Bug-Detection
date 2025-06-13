@@ -14,7 +14,7 @@ source activate /home/u021521/anaconda3/envs/cl/
 echo "Submitting job"
 
 
-BASE_DIR=/home/u021521/depois-ve-se/drl_patches/sparse_autoencoders/
+BASE_DIR=/home/u021521/depois-ve-se/sae_java_bug/sparse_autoencoders/
 
 
 run_pipeline() {

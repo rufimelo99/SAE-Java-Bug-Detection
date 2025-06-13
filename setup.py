@@ -9,7 +9,7 @@ def read_requirements():
 
 
 setup(
-    name="drl_patches",
+    name="sae_java_bug",
     version="0.0.1",
     packages=find_packages(),
     install_requires=read_requirements(),

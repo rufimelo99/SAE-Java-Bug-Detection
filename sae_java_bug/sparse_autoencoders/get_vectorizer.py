@@ -5,8 +5,8 @@ from typing import List
 
 import pandas as pd
 import torch
-from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.utils import set_seed
+from sae_java_bug.logger import logger
+from sae_java_bug.sparse_autoencoders.utils import set_seed
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 

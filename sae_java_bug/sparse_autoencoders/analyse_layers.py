@@ -7,9 +7,9 @@ import einops
 import numpy as np
 import pandas as pd
 import torch
-from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.schemas import AvailableModels, PlotType
-from drl_patches.sparse_autoencoders.utils import (
+from sae_java_bug.logger import logger
+from sae_java_bug.sparse_autoencoders.schemas import AvailableModels, PlotType
+from sae_java_bug.sparse_autoencoders.utils import (
     imshow,
     line,
     residual_stack_to_logit_diff,

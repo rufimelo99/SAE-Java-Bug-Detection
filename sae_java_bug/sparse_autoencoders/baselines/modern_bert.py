@@ -4,7 +4,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from drl_patches.logger import logger
+from sae_java_bug.logger import logger
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm

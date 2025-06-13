@@ -4,15 +4,15 @@ import pickle
 
 import pandas as pd
 import torch
-from drl_patches.logger import logger
-from drl_patches.sparse_autoencoders.analyse_layers import store_values
-from drl_patches.sparse_autoencoders.get_vectorizer import load_tfidf_vectorizer
-from drl_patches.sparse_autoencoders.getting_experiment_config import (
+from sae_java_bug.logger import logger
+from sae_java_bug.sparse_autoencoders.analyse_layers import store_values
+from sae_java_bug.sparse_autoencoders.get_vectorizer import load_tfidf_vectorizer
+from sae_java_bug.sparse_autoencoders.getting_experiment_config import (
     load_training_indexes,
 )
-from drl_patches.sparse_autoencoders.schemas import AvailableModels
-from drl_patches.sparse_autoencoders.utils import set_seed
-from drl_patches.sparse_autoencoders.vulnerability_detection_features import (
+from sae_java_bug.sparse_autoencoders.schemas import AvailableModels
+from sae_java_bug.sparse_autoencoders.utils import set_seed
+from sae_java_bug.sparse_autoencoders.vulnerability_detection_features import (
     ClassifierType,
     parameters_map,
     sk_classifiers_map,
