@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Dict, List, Literal
+from typing import List, Literal
 
 import structlog
 
