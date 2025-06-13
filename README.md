@@ -38,9 +38,14 @@ To launch the main experiment, submit the job script located in the `slurm_scrip
 ```bash
 sbatch slurm_scripts/experiment.sh
 ```
+### Data
+
+![Example Visualization](images/repair_data.png)
+
 
 ### 🧵 Experiment Pipeline Overview
 
+![Example Visualization](images/methodology.png)
 The experiment proceeds through the following main stages:
 
 1. **Experiment Configuration**
@@ -52,6 +57,7 @@ The experiment proceeds through the following main stages:
 
    * **SAE Inference**: Extract SAE features from the residual streams of different LLM layers.
    * **Best-K Feature Selection**: Identify the most informative features from stored representations.
+   ![Example Visualization](images/sae.png)
    * **Probing**: Evaluate selected features using simple classifiers to understand their effectiveness.
 
 3. **BERT Model Benchmarking**
@@ -66,9 +72,14 @@ Results are documented through Jupyter notebooks in the `notebooks` directory:
 
 * `activated_features.ipynb`
   *Visualizes prompt-triggered feature activations for interpretability.*
+  ![Example Visualization](images/specific_activation_gemma.png)
 
 * `visualization.ipynb`
   *Presents aggregate experiment results and comparative visualizations.*
+  ![Example Visualization](images/accuracy_models.png)
+  ![Example Visualization](images/heat.png)
+
 
 * `transferability.ipynb`
   *Analyzes how SAE features generalize across different LLMs and datasets.*
+  ![Example Visualization](images/transf2.png)
