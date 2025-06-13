@@ -5,7 +5,6 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from sae_java_bug.logger import logger
 from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
 from tqdm import tqdm, trange
 from transformers import (
@@ -15,6 +14,8 @@ from transformers import (
     TrainerCallback,
     TrainingArguments,
 )
+
+from sae_java_bug.logger import logger
 
 random.seed(42)
 tqdm.pandas()

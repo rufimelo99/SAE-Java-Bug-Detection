@@ -4,13 +4,14 @@ import os
 import warnings
 
 import pandas as pd
+from tqdm import trange
+
 from sae_java_bug.logger import logger
 from sae_java_bug.sparse_autoencoders.getting_experiment_config import (
     load_training_indexes,
     save_config,
 )
 from sae_java_bug.sparse_autoencoders.utils import read_jsonl_file, set_seed
-from tqdm import trange
 
 warnings.filterwarnings("ignore")
 

@@ -4,6 +4,9 @@ import pickle
 
 import pandas as pd
 import torch
+from sklearn.model_selection import GridSearchCV
+from tqdm import tqdm
+
 from sae_java_bug.logger import logger
 from sae_java_bug.sparse_autoencoders.analyse_layers import store_values
 from sae_java_bug.sparse_autoencoders.get_vectorizer import load_tfidf_vectorizer
@@ -17,8 +20,6 @@ from sae_java_bug.sparse_autoencoders.vulnerability_detection_features import (
     parameters_map,
     sk_classifiers_map,
 )
-from sklearn.model_selection import GridSearchCV
-from tqdm import tqdm
 
 tqdm.pandas()
 torch.set_grad_enabled(False)

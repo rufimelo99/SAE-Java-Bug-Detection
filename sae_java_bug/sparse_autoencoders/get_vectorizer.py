@@ -5,10 +5,11 @@ from typing import List
 
 import pandas as pd
 import torch
-from sae_java_bug.logger import logger
-from sae_java_bug.sparse_autoencoders.utils import set_seed
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
+
+from sae_java_bug.logger import logger
+from sae_java_bug.sparse_autoencoders.utils import set_seed
 
 tqdm.pandas()
 torch.set_grad_enabled(False)
