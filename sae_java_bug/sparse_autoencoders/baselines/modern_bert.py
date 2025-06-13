@@ -4,11 +4,12 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from sae_java_bug.logger import logger
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from transformers import AdamW, AutoModelForSequenceClassification, AutoTokenizer
+
+from sae_java_bug.logger import logger
 
 if torch.backends.mps.is_available():
     DEVICE = "mps"

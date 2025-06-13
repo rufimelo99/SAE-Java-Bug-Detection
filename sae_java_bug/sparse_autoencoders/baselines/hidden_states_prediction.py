@@ -8,6 +8,9 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.model_selection import GridSearchCV
+from tqdm import tqdm, trange
+
 from sae_java_bug.logger import logger
 from sae_java_bug.sparse_autoencoders.vulnerability_detection_features import (
     ClassifierType,
@@ -16,8 +19,6 @@ from sae_java_bug.sparse_autoencoders.vulnerability_detection_features import (
     sk_classifiers_map,
     store_classifier_info,
 )
-from sklearn.model_selection import GridSearchCV
-from tqdm import tqdm, trange
 
 warnings.filterwarnings("ignore")
 
