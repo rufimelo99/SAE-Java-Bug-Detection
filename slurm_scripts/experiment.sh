@@ -216,4 +216,4 @@ run_bert_pipeline "answerdotai/ModernBERT-large"
 # Getting the vectorizer
 echo "Getting the vectorizer"
 python get_vectorizer.py --csvs artifacts/gbug-java.csv artifacts/humaneval.csv artifacts/defects4j.csv --output_dir artifacts/
-python classical_data_mining.py --csv_path artifacts/defects4j.csv --output_dir ole --train-indexes_path artifacts/defects4j_train_indexes.json  --vectorizer_path artifacts/vectorizer.pkl
+python classical_data_mining.py --csv_path artifacts/defects4j.csv --output_dir rf_prober --train-indexes_path artifacts/defects4j_train_indexes.json  --vectorizer_path artifacts/vectorizer.pkl
