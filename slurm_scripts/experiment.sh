@@ -15,6 +15,8 @@
 source activate /home/u021521/anaconda3/envs/myenv/
 echo "Submitting job"
 
+BASE_DIR=/home/u021521/depois-ve-se/sae_java_bug/sparse_autoencoders/
+cd $BASE_DIR
 
 echo "Getting experiment config. Gettig train indexes"
 python getting_experiment_config.py --csv_path artifacts/gbug-java.csv --output_path artifacts/gbug-java_train_indexes.json
@@ -98,17 +100,17 @@ echo "Running pipeline for humaneval"
 run_gemma2b_pipeline "humaneval" "artifacts/humaneval.csv" "artifacts/humaneval_train_indexes.json"
 
 
-# for i in {1..33};
-# do
-#   python3 sae_exploration.py \
-#     --csv_path $BASE_DIR/artifacts/defects4j.csv \
-#     --layer $i \
-#     --model meta-llama/Llama-3.1-8B \
-#     --release llama_scope_lxr_32x \
-#     --sae_id l${i}r_32x \
-#     --cache_component hook_resid_post.hook_sae_acts_post \
-#     --output_dir $BASE_DIR/llama_defects4j/layer$i
-# done
+for i in {0..33};
+do
+  python3 sae_exploration.py \
+    --csv_path $BASE_DIR/artifacts/defects4j.csv \
+    --layer $i \
+    --model meta-llama/Llama-3.1-8B \
+    --release llama_scope_lxr_32x \
+    --sae_id l${i}r_32x \
+    --cache_component hook_resid_post.hook_sae_acts_post \
+    --output_dir $BASE_DIR/llama_defects4j/layer$i
+done
 
 
 

@@ -15,7 +15,7 @@ echo "Submitting job"
 
 
 BASE_DIR=/home/u021521/depois-ve-se/sae_java_bug/sparse_autoencoders/
-
+cd $BASE_DIR
 
 run_pipeline() {
     model=$1
