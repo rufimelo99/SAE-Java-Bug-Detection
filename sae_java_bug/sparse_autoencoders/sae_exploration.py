@@ -23,6 +23,8 @@ class ActivationsSchema(BaseModel):
     vuln_id: str
     secure_code: str
     vulnerable_code: str
+    cwe: str
+    file_extension: str
     secure: List[float]
     vulnerable: List[float]
     layer: int
@@ -58,6 +60,9 @@ hf_path = "rufimelo/DeltaSecommits"
 before_func_col = "prior_version"
 after_func_col = "after_version"
 vuln_id_col = "vuln_id"
+cwe_col = "cwe"
+file_ext_col = "file_extension"
+
 output_dir = "../artifacts/activations/"
 from datetime import datetime
 
@@ -95,6 +100,8 @@ def log_warning(message: str, filepath: str):
         f.write(message + "\n")
 
 
+skypped_vuln_ids = set()
+
 for layer in tqdm(cfg.layers_available):
     SAE_ID = cfg.sae_id(layer_index=layer)
     sae, cfg_dict, sparsity = SAE.from_pretrained(
@@ -104,6 +111,12 @@ for layer in tqdm(cfg.layers_available):
     for i in trange(len(MSR_df)):
         secure_code = str(MSR_df.iloc[i][before_func_col])
         vulnerable_code = str(MSR_df.iloc[i][after_func_col])
+        cwe = str(MSR_df.iloc[i][cwe_col])
+        file_extension = str(MSR_df.iloc[i][file_ext_col])
+        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
+
+        if vuln_id in skypped_vuln_ids:
+            continue
 
         max_tokens = max(
             model.to_tokens(secure_code, prepend_bos=True).shape[1],
@@ -113,9 +126,8 @@ for layer in tqdm(cfg.layers_available):
             warn_msg = f"Skipping vuln_id {MSR_df.iloc[i][vuln_id_col]} due to max tokens {max_tokens} exceeding limit."
             logger.warning(warn_msg)
             log_warning(warn_msg, logger_filepath)
+            skypped_vuln_ids.add(vuln_id)
             continue
-
-        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
 
         _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
@@ -151,6 +163,8 @@ for layer in tqdm(cfg.layers_available):
             vulnerable=vuln_values.tolist(),
             layer=layer,
             sae_config=cfg,
+            cwe=cwe,
+            file_extension=file_extension,
         )
 
         activations.append_to_jsonl(
