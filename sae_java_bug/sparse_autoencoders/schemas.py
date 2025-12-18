@@ -1,15 +1,105 @@
+from dataclasses import dataclass
 from enum import Enum
 
+from sae_java_bug.logger import logger
 
-class AvailableModels(str, Enum):
-    GPT2_SMALL = "gpt2-small"
-    LLAMA3_1 = "meta-llama/Llama-3.1-8B"
-    GEMMA2_2B = "google/gemma-2-2b"
-    GEMMA2_2B_IT = "google/gemma-2-2b-it"
+# -------------------------------
+# High-level model family enums
+# -------------------------------
 
 
-class PlotType(str, Enum):
-    LAYER_WISE = "layer-wise"
-    ATTENTION = "attention"
-    ACCUMULATED_RESIDUAL = "accumulated-residual"
-    SAE_FEATURE_IMPORTANCE = "sae-feature-importance"
+class ModelFamily(str, Enum):
+    GPT2 = "gpt2"
+    GEMMA = "google/gemma-2-2b"
+    LLAMA = "llama"
+    DEEPSEEK = "meta-llama/Llama-3.1-8B"
+    PYTHIA = "pythia-70m-deduped"
+
+
+class Release(str, Enum):
+    GPT2_JB = "gpt2-small-res-jb"
+    GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
+    LLAMA_SCOPE = "llama_scope_lxr_32x"
+    DEEPSEEK_BASE = "llama_scope_r1_distill"
+    PYTHIA_70M = "pythia-70m-deduped-res-sm"
+
+
+class CachedComponent(str, Enum):
+    HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
+    HOOK_RESID_SAE_ACTS_POST = "hook_resid_post.hook_sae_acts_post"
+
+
+# -------------------------------
+# Parametric SAE ID generators
+# -------------------------------
+
+
+def gpt2_resid_pre_layers(n=12):
+    return [f"blocks.{i}.hook_resid_pre" for i in range(n)]
+
+
+def gemma_canonical_layers(n=25):
+    return [f"layer_{i}/width_16k/canonical" for i in range(n)]
+
+
+def llama_scope_layers(n=32):
+    return [f"l{i}r_32x" for i in range(n)]
+
+
+def deepseek_distill_layers(n=32):
+    return [f"l{i}r_400m_slimpajama_400m_openr1_math" for i in range(n)]
+
+
+def pythia_70m_layers(n=6):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
+
+# -------------------------------
+# Central registry
+# -------------------------------
+
+SAE_REGISTRY = {
+    ModelFamily.GPT2: {
+        Release.GPT2_JB: gpt2_resid_pre_layers(12),
+    },
+    ModelFamily.GEMMA: {
+        Release.GEMMA_SCOPE: gemma_canonical_layers(25),
+    },
+    ModelFamily.LLAMA: {
+        Release.LLAMA_SCOPE: llama_scope_layers(32),
+    },
+    ModelFamily.DEEPSEEK: {
+        Release.DEEPSEEK_BASE: deepseek_distill_layers(32),
+    },
+    ModelFamily.PYTHIA: {
+        Release.PYTHIA_70M: pythia_70m_layers(6),
+    },
+}
+
+
+# -------------------------------
+# Dataclass config
+# -------------------------------
+
+
+@dataclass
+class SAEConfig:
+    model: ModelFamily
+    release: Release
+    cached_component: CachedComponent
+    layers_available: list[int]
+
+    def sae_id(self, layer_index) -> str:
+        try:
+            return SAE_REGISTRY[self.model][self.release][layer_index]
+        except (KeyError, IndexError):
+            raise ValueError(
+                f"Invalid configuration: {self.model=} {self.release=} {layer_index=}"
+            )
+
+    def __str__(self):
+        return (
+            f"SAEConfig(model={self.model}, "
+            f"release={self.release}, "
+            f"component={self.cached_component}, "
+        )

@@ -1,331 +1,172 @@
-import argparse
+import json
 import os
-from dataclasses import dataclass
-from enum import Enum
+from pathlib import Path
+from typing import List
 
 import pandas as pd
 import torch
+from datasets import load_dataset
+from pydantic import BaseModel
 from sae_lens import SAE, HookedSAETransformer
 from tqdm import tqdm, trange
 
 from sae_java_bug.logger import logger
-from sae_java_bug.sparse_autoencoders.analyse_layers import store_values
-from sae_java_bug.sparse_autoencoders.schemas import AvailableModels, PlotType
+from sae_java_bug.sparse_autoencoders.schemas import (
+    CachedComponent,
+    ModelFamily,
+    Release,
+    SAEConfig,
+)
+
+
+class ActivationsSchema(BaseModel):
+    vuln_id: str
+    secure_code: str
+    vulnerable_code: str
+    cwe: str
+    file_extension: str
+    secure: List[float]
+    vulnerable: List[float]
+    layer: int
+    sae_config: SAEConfig
+
+    def append_to_jsonl(self, filepath: str):
+        path = Path(filepath)
+
+        # Ensure parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        mode = "a" if path.exists() else "w"
+
+        # Append new activation to list
+        with path.open(mode) as f:
+            f.write(json.dumps(self.model_dump()) + "\n")
+
+
+def normalise(txt: str) -> str:
+    # replace \n and /
+    return txt.replace("/", " ")
+
 
 torch.set_grad_enabled(False)
 if torch.backends.mps.is_available():
     device = "mps"
 else:
     device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
+
 logger.info("Getting device.", device=device)
 
+hf_path = "rufimelo/DeltaSecommits"
+before_func_col = "prior_version"
+after_func_col = "after_version"
+vuln_id_col = "vuln_id"
+cwe_col = "cwe"
+file_ext_col = "file_extension"
 
-class Release(str, Enum):
-    GPT2_SMALL_RES_JB = "gpt2-small-res-jb"
-    GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
-    LLAMA_SCOPE = "llama_scope_lxr_32x"
+output_dir = "../artifacts/activations/"
+from datetime import datetime
 
-
-class SAE_ID(str, Enum):
-    BLOCKS_0_HOOK_RESID_PRE = "blocks.0.hook_resid_pre"
-    BLOCKS_1_HOOK_RESID_PRE = "blocks.1.hook_resid_pre"
-    BLOCKS_2_HOOK_RESID_PRE = "blocks.2.hook_resid_pre"
-    BLOCKS_3_HOOK_RESID_PRE = "blocks.3.hook_resid_pre"
-    BLOCKS_4_HOOK_RESID_PRE = "blocks.4.hook_resid_pre"
-    BLOCKS_5_HOOK_RESID_PRE = "blocks.5.hook_resid_pre"
-    BLOCKS_6_HOOK_RESID_PRE = "blocks.6.hook_resid_pre"
-    BLOCKS_7_HOOK_RESID_PRE = "blocks.7.hook_resid_pre"
-    BLOCKS_8_HOOK_RESID_PRE = "blocks.8.hook_resid_pre"
-    BLOCKS_9_HOOK_RESID_PRE = "blocks.9.hook_resid_pre"
-    BLOCKS_10_HOOK_RESID_PRE = "blocks.10.hook_resid_pre"
-    BLOCKS_11_HOOK_RESID_PRE = "blocks.11.hook_resid_pre"
-    GEMMA_SCOPE_0_WIDTH_16K_CANONICAL = "layer_0/width_16k/canonical"
-    GEMMA_SCOPE_1_WIDTH_16K_CANONICAL = "layer_1/width_16k/canonical"
-    GEMMA_SCOPE_2_WIDTH_16K_CANONICAL = "layer_2/width_16k/canonical"
-    GEMMA_SCOPE_3_WIDTH_16K_CANONICAL = "layer_3/width_16k/canonical"
-    GEMMA_SCOPE_4_WIDTH_16K_CANONICAL = "layer_4/width_16k/canonical"
-    GEMMA_SCOPE_5_WIDTH_16K_CANONICAL = "layer_5/width_16k/canonical"
-    GEMMA_SCOPE_6_WIDTH_16K_CANONICAL = "layer_6/width_16k/canonical"
-    GEMMA_SCOPE_7_WIDTH_16K_CANONICAL = "layer_7/width_16k/canonical"
-    GEMMA_SCOPE_8_WIDTH_16K_CANONICAL = "layer_8/width_16k/canonical"
-    GEMMA_SCOPE_9_WIDTH_16K_CANONICAL = "layer_9/width_16k/canonical"
-    GEMMA_SCOPE_10_WIDTH_16K_CANONICAL = "layer_10/width_16k/canonical"
-    GEMMA_SCOPE_11_WIDTH_16K_CANONICAL = "layer_11/width_16k/canonical"
-    GENMA_SCOPE_12_WIDTH_16K_CANONICAL = "layer_12/width_16k/canonical"
-    GENMA_SCOPE_13_WIDTH_16K_CANONICAL = "layer_13/width_16k/canonical"
-    GENMA_SCOPE_14_WIDTH_16K_CANONICAL = "layer_14/width_16k/canonical"
-    GENMA_SCOPE_15_WIDTH_16K_CANONICAL = "layer_15/width_16k/canonical"
-    GENMA_SCOPE_16_WIDTH_16K_CANONICAL = "layer_16/width_16k/canonical"
-    GENMA_SCOPE_17_WIDTH_16K_CANONICAL = "layer_17/width_16k/canonical"
-    GENMA_SCOPE_18_WIDTH_16K_CANONICAL = "layer_18/width_16k/canonical"
-    GENMA_SCOPE_19_WIDTH_16K_CANONICAL = "layer_19/width_16k/canonical"
-    GENMA_SCOPE_20_WIDTH_16K_CANONICAL = "layer_20/width_16k/canonical"
-    GENMA_SCOPE_21_WIDTH_16K_CANONICAL = "layer_21/width_16k/canonical"
-    GENMA_SCOPE_22_WIDTH_16K_CANONICAL = "layer_22/width_16k/canonical"
-    GENMA_SCOPE_23_WIDTH_16K_CANONICAL = "layer_23/width_16k/canonical"
-    GENMA_SCOPE_24_WIDTH_16K_CANONICAL = "layer_24/width_16k/canonical"
-    LLAMA_SCOPE_0_WIDTH_32k = "l0r_32x"
-    LLAMA_SCOPE_1_WIDTH_32k = "l1r_32x"
-    LLAMA_SCOPE_2_WIDTH_32k = "l2r_32x"
-    LLAMA_SCOPE_3_WIDTH_32k = "l3r_32x"
-    LLAMA_SCOPE_4_WIDTH_32k = "l4r_32x"
-    LLAMA_SCOPE_5_WIDTH_32k = "l5r_32x"
-    LLAMA_SCOPE_6_WIDTH_32k = "l6r_32x"
-    LLAMA_SCOPE_7_WIDTH_32k = "l7r_32x"
-    LLAMA_SCOPE_8_WIDTH_32k = "l8r_32x"
-    LLAMA_SCOPE_9_WIDTH_32k = "l9r_32x"
-    LLAMA_SCOPE_10_WIDTH_32k = "l10r_32x"
-    LLAMA_SCOPE_11_WIDTH_32k = "l11r_32x"
-    LLAMA_SCOPE_12_WIDTH_32k = "l12r_32x"
-    LLAMA_SCOPE_13_WIDTH_32k = "l13r_32x"
-    LLAMA_SCOPE_14_WIDTH_32k = "l14r_32x"
-    LLAMA_SCOPE_15_WIDTH_32k = "l15r_32x"
-    LLAMA_SCOPE_16_WIDTH_32k = "l16r_32x"
-    LLAMA_SCOPE_17_WIDTH_32k = "l17r_32x"
-    LLAMA_SCOPE_18_WIDTH_32k = "l18r_32x"
-    LLAMA_SCOPE_19_WIDTH_32k = "l19r_32x"
-    LLAMA_SCOPE_20_WIDTH_32k = "l20r_32x"
-    LLAMA_SCOPE_21_WIDTH_32k = "l21r_32x"
-    LLAMA_SCOPE_22_WIDTH_32k = "l22r_32x"
-    LLAMA_SCOPE_23_WIDTH_32k = "l23r_32x"
-    LLAMA_SCOPE_24_WIDTH_32k = "l24r_32x"
-    LLAMA_SCOPE_25_WIDTH_32k = "l25r_32x"
-    LLAMA_SCOPE_26_WIDTH_32k = "l26r_32x"
-    LLAMA_SCOPE_27_WIDTH_32k = "l27r_32x"
-    LLAMA_SCOPE_28_WIDTH_32k = "l28r_32x"
-    LLAMA_SCOPE_29_WIDTH_32k = "l29r_32x"
-    LLAMA_SCOPE_30_WIDTH_32k = "l30r_32x"
-    LLAMA_SCOPE_31_WIDTH_32k = "l31r_32x"
+current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+output_dir = os.path.join(output_dir, f"run_{current_time}/")
+logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 
-class CachedComponent(str, Enum):
-    HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
-    HOOK_RESID_SAE_ACTS_POST = "hook_resid_post.hook_sae_acts_post"
+MSR_df = load_dataset(hf_path, split="train").to_pandas()
+cfg = SAEConfig(
+    model=ModelFamily.GEMMA,
+    release=Release.GEMMA_SCOPE,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[i for i in range(26)],
+)
+
+MODEL_ARG = cfg.model.value
+RELEASE = cfg.release.value
+CACHE_COMPONENT = cfg.cached_component.value
 
 
-@dataclass
-class SAEAnalysis:
-    model: AvailableModels
-    logit_lens_logit_diffs: list
-    labels: list
-    plot_type: PlotType
-    index: list
-    release: str
-    sae_id: str
-    cache_component: str
+model = HookedSAETransformer.from_pretrained(MODEL_ARG, device=device)
 
 
-def main(
-    model_arg: str,
-    csv_path: str,
-    release: str,
-    sae_id: str,
-    layer: int,
-    cache_component: str,
-    output_dir: str,
-    before_func_col: str = "func_before",
-    after_func_col: str = "func_after",
-):
-    MSR_df = pd.read_csv(csv_path)
-    model = HookedSAETransformer.from_pretrained(model_arg, device=device)
-    logger.info("Loading Model...")
+def log_warning(message: str, filepath: str):
+    path = Path(filepath)
+
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    mode = "a" if path.exists() else "w"
+
+    # Append new activation to list
+    with path.open(mode) as f:
+        f.write(message + "\n")
+
+
+skypped_vuln_ids = set()
+
+for layer in tqdm(cfg.layers_available):
+    SAE_ID = cfg.sae_id(layer_index=layer)
     sae, cfg_dict, sparsity = SAE.from_pretrained(
-        release=release,
-        sae_id=sae_id,
-        device=device,
+        release=RELEASE, sae_id=SAE_ID, device=device
     )
-    logger.info("Model loaded")
 
     for i in trange(len(MSR_df)):
-        import math
+        secure_code = str(MSR_df.iloc[i][before_func_col])
+        vulnerable_code = str(MSR_df.iloc[i][after_func_col])
+        cwe = str(MSR_df.iloc[i][cwe_col])
+        file_extension = str(MSR_df.iloc[i][file_ext_col])
+        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
 
-        LIMIT = math.inf
-        prompt = [str(MSR_df.iloc[i][after_func_col])]
-        tokens = model.to_tokens(prompt, prepend_bos=True)
-        if tokens.shape[1] > LIMIT:
-            print("Skiping")
+        if vuln_id in skypped_vuln_ids:
             continue
 
-        prompt = [str(MSR_df.iloc[i][before_func_col])]
-        tokens = model.to_tokens(prompt, prepend_bos=True)
-        if tokens.shape[1] > LIMIT:
-            print("Skiping")
+        max_tokens = max(
+            model.to_tokens(secure_code, prepend_bos=True).shape[1],
+            model.to_tokens(vulnerable_code, prepend_bos=True).shape[1],
+        )
+        if max_tokens > 2000:
+            warn_msg = f"Skipping vuln_id {MSR_df.iloc[i][vuln_id_col]} due to max tokens {max_tokens} exceeding limit."
+            logger.warning(warn_msg)
+            log_warning(warn_msg, logger_filepath)
+            skypped_vuln_ids.add(vuln_id)
             continue
 
-        _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
+        _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-
         feature_activation_df = pd.DataFrame(
-            cache["blocks" + "." + str(layer) + "." + cache_component][0, -1, :]
+            cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
             .cpu()
             .numpy(),
             index=index,
         )
         feature_activation_df.columns = ["vulnerable"]
+        del cache
+        torch.cuda.empty_cache()
 
-        prompt = [str(MSR_df.iloc[i][after_func_col])]
-
-        _, cache = model.run_with_cache_with_saes(prompt, saes=[sae])
+        _, cache = model.run_with_cache_with_saes([vulnerable_code], saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
 
         feature_activation_df["secure"] = (
-            cache["blocks" + "." + str(layer) + "." + cache_component][0, -1, :]
+            cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
             .cpu()
             .numpy()
         )
-        feature_activation_df["diff"] = abs(
-            feature_activation_df["vulnerable"] - feature_activation_df["secure"]
-        )
+        del cache
+        torch.cuda.empty_cache()
 
         safe_values = feature_activation_df["secure"].values
         vuln_values = feature_activation_df["vulnerable"].values
-        diff_values = feature_activation_df["diff"].values
 
-        sae_analysis_safe = SAEAnalysis(
-            model=model_arg,
-            logit_lens_logit_diffs=safe_values.tolist(),
-            labels=index,
-            plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
-            index=i,
-            release=release,
-            sae_id=sae_id,
-            cache_component=cache_component,
-        )
-        store_values(
-            os.path.join(output_dir, "feature_importance_safe.jsonl"),
-            append=True,
-            index=sae_analysis_safe.index,
-            model=sae_analysis_safe.model,
-            plot_type=sae_analysis_safe.plot_type,
-            sae_id=sae_analysis_safe.sae_id,
-            cache_component=sae_analysis_safe.cache_component,
-            values=sae_analysis_safe.logit_lens_logit_diffs,
-            labels=sae_analysis_safe.labels,
+        activations = ActivationsSchema(
+            vuln_id=vuln_id,
+            secure_code=secure_code,
+            vulnerable_code=vulnerable_code,
+            secure=safe_values.tolist(),
+            vulnerable=vuln_values.tolist(),
+            layer=layer,
+            sae_config=cfg,
+            cwe=cwe,
+            file_extension=file_extension,
         )
 
-        sae_analysis_vuln = SAEAnalysis(
-            model=model_arg,
-            logit_lens_logit_diffs=vuln_values.tolist(),
-            labels=index,
-            plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
-            index=i,
-            release=release,
-            sae_id=sae_id,
-            cache_component=cache_component,
+        activations.append_to_jsonl(
+            f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
         )
-
-        store_values(
-            os.path.join(output_dir, "feature_importance_vuln.jsonl"),
-            append=True,
-            index=sae_analysis_vuln.index,
-            model=sae_analysis_vuln.model,
-            plot_type=sae_analysis_vuln.plot_type,
-            sae_id=sae_analysis_vuln.sae_id,
-            cache_component=sae_analysis_vuln.cache_component,
-            values=sae_analysis_vuln.logit_lens_logit_diffs,
-            labels=sae_analysis_vuln.labels,
-        )
-
-        sae_analysis_diff = SAEAnalysis(
-            model=model_arg,
-            logit_lens_logit_diffs=diff_values.tolist(),
-            labels=index,
-            plot_type=PlotType.SAE_FEATURE_IMPORTANCE,
-            index=i,
-            release=release,
-            sae_id=sae_id,
-            cache_component=cache_component,
-        )
-
-        store_values(
-            os.path.join(output_dir, "feature_importance_diff.jsonl"),
-            append=True,
-            index=sae_analysis_diff.index,
-            model=sae_analysis_diff.model,
-            plot_type=sae_analysis_diff.plot_type,
-            sae_id=sae_analysis_diff.sae_id,
-            cache_component=sae_analysis_diff.cache_component,
-            values=sae_analysis_diff.logit_lens_logit_diffs,
-            labels=sae_analysis_diff.labels,
-        )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    model_options = [
-        model.value for model in list(AvailableModels.__members__.values())
-    ]
-    parser.add_argument(
-        "--model",
-        type=AvailableModels,
-        help="The model to analyse",
-        choices=model_options,
-        default=AvailableModels.GPT2_SMALL.value,
-    )
-
-    parser.add_argument(
-        "--release",
-        type=Release,
-        help="The release to analyse",
-        choices=[r.value for r in list(Release.__members__.values())],
-        default=Release.GPT2_SMALL_RES_JB.value,
-    )
-
-    parser.add_argument(
-        "--sae_id",
-        type=SAE_ID,
-        help="The SAE ID to analyse",
-        choices=[s.value for s in list(SAE_ID.__members__.values())],
-        default=SAE_ID.BLOCKS_0_HOOK_RESID_PRE.value,
-    )
-
-    parser.add_argument(
-        "--cache_component",
-        type=CachedComponent,
-        help="The cache component to analyse",
-        choices=[c.value for c in list(CachedComponent.__members__.values())],
-        default=CachedComponent.HOOK_SAE_ACTS_POST.value,
-    )
-
-    parser.add_argument(
-        "--layer",
-        type=int,
-        help="The layer to analyse",
-    )
-
-    parser.add_argument("--csv_path")
-
-    parser.add_argument(
-        "--before_func_col",
-        type=str,
-        default="func_before",
-        help="The column name for the function before the change",
-    )
-
-    parser.add_argument(
-        "--after_func_col",
-        type=str,
-        default="func_after",
-        help="The column name for the function after the change",
-    )
-
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="artifacts",
-        help="The directory to store the output files",
-    )
-
-    args = parser.parse_args()
-    main(
-        model_arg=args.model,
-        csv_path=args.csv_path,
-        release=args.release,
-        sae_id=args.sae_id,
-        layer=args.layer,
-        cache_component=args.cache_component,
-        before_func_col=args.before_func_col,
-        after_func_col=args.after_func_col,
-        output_dir=args.output_dir,
-    )
