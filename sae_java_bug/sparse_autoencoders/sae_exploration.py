@@ -40,7 +40,8 @@ class ActivationsSchema(BaseModel):
         with path.open(mode) as f:
             f.write(json.dumps(self.model_dump()) + "\n")
 
-def normalise(txt:str)-> str:
+
+def normalise(txt: str) -> str:
     # replace \n and /
     return txt.replace("/", " ")
 
@@ -59,6 +60,7 @@ after_func_col = "after_version"
 vuln_id_col = "vuln_id"
 output_dir = "../artifacts/activations/"
 from datetime import datetime
+
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 output_dir = os.path.join(output_dir, f"run_{current_time}/")
 logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
@@ -79,7 +81,8 @@ CACHE_COMPONENT = cfg.cached_component.value
 
 model = HookedSAETransformer.from_pretrained(MODEL_ARG, device=device)
 
-def log_warning(message: str,filepath: str):
+
+def log_warning(message: str, filepath: str):
     path = Path(filepath)
 
     # Ensure parent directory exists
@@ -91,27 +94,28 @@ def log_warning(message: str,filepath: str):
     with path.open(mode) as f:
         f.write(message + "\n")
 
+
 for layer in tqdm(cfg.layers_available):
     SAE_ID = cfg.sae_id(layer_index=layer)
     sae, cfg_dict, sparsity = SAE.from_pretrained(
-        release=RELEASE,
-        sae_id=SAE_ID,
-        device=device
+        release=RELEASE, sae_id=SAE_ID, device=device
     )
 
     for i in trange(len(MSR_df)):
         secure_code = str(MSR_df.iloc[i][before_func_col])
         vulnerable_code = str(MSR_df.iloc[i][after_func_col])
 
-        max_tokens = max(model.to_tokens(secure_code, prepend_bos=True).shape[1], model.to_tokens(vulnerable_code, prepend_bos=True).shape[1])
+        max_tokens = max(
+            model.to_tokens(secure_code, prepend_bos=True).shape[1],
+            model.to_tokens(vulnerable_code, prepend_bos=True).shape[1],
+        )
         if max_tokens > 2000:
             warn_msg = f"Skipping vuln_id {MSR_df.iloc[i][vuln_id_col]} due to max tokens {max_tokens} exceeding limit."
             logger.warning(warn_msg)
             log_warning(warn_msg, logger_filepath)
             continue
 
-
-        vuln_id = str(MSR_df.iloc[i][vuln_id_col]) 
+        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
 
         _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
