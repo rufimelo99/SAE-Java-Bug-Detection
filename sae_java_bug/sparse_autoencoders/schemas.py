@@ -89,7 +89,6 @@ class SAEConfig:
     cached_component: CachedComponent
     layers_available: list[int]
 
-    @property
     def sae_id(self, layer_index) -> str:
         try:
             return SAE_REGISTRY[self.model][self.release][layer_index]
@@ -102,6 +101,5 @@ class SAEConfig:
         return (
             f"SAEConfig(model={self.model}, "
             f"release={self.release}, "
-            f"sae_id={self.sae_id}, "
-            f"component={self.cached_component})"
+            f"component={self.cached_component}, "
         )

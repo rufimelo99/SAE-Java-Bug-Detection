@@ -66,23 +66,22 @@ cfg = SAEConfig(
     layers_available=[i for i in range(26)],
 )
 
-print(cfg.sae_id)
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value
-SAE_ID = cfg.sae_id
 CACHE_COMPONENT = cfg.cached_component.value
 
 
 model = HookedSAETransformer.from_pretrained(MODEL_ARG, device=device)
-logger.info("Loading Model...")
-sae, cfg_dict, sparsity = SAE.from_pretrained(
-    release=RELEASE,
-    sae_id=SAE_ID,
-    device=device,
-)
-logger.info("Model loaded")
+
 
 for layer in tqdm(cfg.layers_available):
+    SAE_ID = cfg.sae_id(layer_index=layer)
+    sae, cfg_dict, sparsity = SAE.from_pretrained(
+        release=RELEASE,
+        sae_id=SAE_ID,
+        device=device,
+    )
+
     for i in trange(len(MSR_df)):
         secure_code = str(MSR_df.iloc[i][before_func_col])
         vulnerable_code = str(MSR_df.iloc[i][after_func_col])
@@ -90,7 +89,6 @@ for layer in tqdm(cfg.layers_available):
 
         _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
         index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-        print(cache.keys())
         feature_activation_df = pd.DataFrame(
             cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
             .cpu()
