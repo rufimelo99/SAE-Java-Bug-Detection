@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from sae_java_bug.logger import logger
+
 # -------------------------------
 # High-level model family enums
 # -------------------------------
@@ -8,14 +10,18 @@ from enum import Enum
 
 class ModelFamily(str, Enum):
     GPT2 = "gpt2"
-    GEMMA = "gemma"
+    GEMMA = "google/gemma-2-2b"
     LLAMA = "llama"
+    DEEPSEEK = "meta-llama/Llama-3.1-8B"
+    PYTHIA = "pythia-70m-deduped"
 
 
 class Release(str, Enum):
     GPT2_JB = "gpt2-small-res-jb"
     GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
     LLAMA_SCOPE = "llama_scope_lxr_32x"
+    DEEPSEEK_BASE = "llama_scope_r1_distill"
+    PYTHIA_70M = "pythia-70m-deduped-res-sm"
 
 
 class CachedComponent(str, Enum):
@@ -40,6 +46,14 @@ def llama_scope_layers(n=32):
     return [f"l{i}r_32x" for i in range(n)]
 
 
+def deepseek_distill_layers(n=32):
+    return [f"l{i}r_400m_slimpajama_400m_openr1_math" for i in range(n)]
+
+
+def pythia_70m_layers(n=6):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
+
 # -------------------------------
 # Central registry
 # -------------------------------
@@ -54,6 +68,12 @@ SAE_REGISTRY = {
     ModelFamily.LLAMA: {
         Release.LLAMA_SCOPE: llama_scope_layers(32),
     },
+    ModelFamily.DEEPSEEK: {
+        Release.DEEPSEEK_BASE: deepseek_distill_layers(32),
+    },
+    ModelFamily.PYTHIA: {
+        Release.PYTHIA_70M: pythia_70m_layers(6),
+    },
 }
 
 
@@ -66,23 +86,22 @@ SAE_REGISTRY = {
 class SAEConfig:
     model: ModelFamily
     release: Release
-    layer_index: int
     cached_component: CachedComponent
+    layers_available: list[int]
 
     @property
-    def sae_id(self) -> str:
+    def sae_id(self, layer_index) -> str:
         try:
-            return SAE_REGISTRY[self.model][self.release][self.layer_index]
+            return SAE_REGISTRY[self.model][self.release][layer_index]
         except (KeyError, IndexError):
             raise ValueError(
-                f"Invalid configuration: {self.model=} {self.release=} {self.layer_index=}"
+                f"Invalid configuration: {self.model=} {self.release=} {layer_index=}"
             )
 
     def __str__(self):
         return (
             f"SAEConfig(model={self.model}, "
             f"release={self.release}, "
-            f"layer={self.layer_index}, "
             f"sae_id={self.sae_id}, "
             f"component={self.cached_component})"
         )
