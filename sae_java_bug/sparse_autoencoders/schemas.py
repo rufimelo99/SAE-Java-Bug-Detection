@@ -38,7 +38,7 @@ def gpt2_resid_pre_layers(n=12):
     return [f"blocks.{i}.hook_resid_pre" for i in range(n)]
 
 
-def gemma_canonical_layers(n=25):
+def gemma_canonical_layers(n=26):
     return [f"layer_{i}/width_16k/canonical" for i in range(n)]
 
 
@@ -63,7 +63,7 @@ SAE_REGISTRY = {
         Release.GPT2_JB: gpt2_resid_pre_layers(12),
     },
     ModelFamily.GEMMA: {
-        Release.GEMMA_SCOPE: gemma_canonical_layers(25),
+        Release.GEMMA_SCOPE: gemma_canonical_layers(26),
     },
     ModelFamily.LLAMA: {
         Release.LLAMA_SCOPE: llama_scope_layers(32),
