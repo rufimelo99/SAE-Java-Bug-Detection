@@ -1,5 +1,7 @@
+import base64
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -64,7 +66,6 @@ cwe_col = "cwe"
 file_ext_col = "file_extension"
 
 output_dir = "../artifacts/activations/"
-from datetime import datetime
 
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 output_dir = os.path.join(output_dir, f"run_{current_time}/")
@@ -84,9 +85,6 @@ RELEASE = cfg.release.value
 CACHE_COMPONENT = cfg.cached_component.value
 
 
-model = HookedSAETransformer.from_pretrained(MODEL_ARG, device=device)
-
-
 def log_warning(message: str, filepath: str):
     path = Path(filepath)
 
@@ -100,73 +98,79 @@ def log_warning(message: str, filepath: str):
         f.write(message + "\n")
 
 
-skypped_vuln_ids = set()
+if __name__ == "__main__":
+    model = HookedSAETransformer.from_pretrained(MODEL_ARG, device=device)
 
-for layer in tqdm(cfg.layers_available):
-    SAE_ID = cfg.sae_id(layer_index=layer)
-    sae, cfg_dict, sparsity = SAE.from_pretrained(
-        release=RELEASE, sae_id=SAE_ID, device=device
-    )
+    skypped_vuln_ids = set()
 
-    for i in trange(len(MSR_df)):
-        secure_code = str(MSR_df.iloc[i][before_func_col])
-        vulnerable_code = str(MSR_df.iloc[i][after_func_col])
-        cwe = str(MSR_df.iloc[i][cwe_col])
-        file_extension = str(MSR_df.iloc[i][file_ext_col])
-        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
-
-        if vuln_id in skypped_vuln_ids:
-            continue
-
-        max_tokens = max(
-            model.to_tokens(secure_code, prepend_bos=True).shape[1],
-            model.to_tokens(vulnerable_code, prepend_bos=True).shape[1],
-        )
-        if max_tokens > 2000:
-            warn_msg = f"Skipping vuln_id {MSR_df.iloc[i][vuln_id_col]} due to max tokens {max_tokens} exceeding limit."
-            logger.warning(warn_msg)
-            log_warning(warn_msg, logger_filepath)
-            skypped_vuln_ids.add(vuln_id)
-            continue
-
-        _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
-        index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-        feature_activation_df = pd.DataFrame(
-            cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
-            .cpu()
-            .numpy(),
-            index=index,
-        )
-        feature_activation_df.columns = ["vulnerable"]
-        del cache
-        torch.cuda.empty_cache()
-
-        _, cache = model.run_with_cache_with_saes([vulnerable_code], saes=[sae])
-        index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
-
-        feature_activation_df["secure"] = (
-            cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
-            .cpu()
-            .numpy()
-        )
-        del cache
-        torch.cuda.empty_cache()
-
-        safe_values = feature_activation_df["secure"].values
-        vuln_values = feature_activation_df["vulnerable"].values
-
-        activations = ActivationsSchema(
-            vuln_id=vuln_id,
-            secure_code=secure_code,
-            vulnerable_code=vulnerable_code,
-            secure=safe_values.tolist(),
-            vulnerable=vuln_values.tolist(),
-            layer=layer,
-            sae_config=cfg,
-            cwe=cwe,
-            file_extension=file_extension,
+    for layer in tqdm(cfg.layers_available):
+        SAE_ID = cfg.sae_id(layer_index=layer)
+        sae, cfg_dict, sparsity = SAE.from_pretrained(
+            release=RELEASE, sae_id=SAE_ID, device=device
         )
 
-        activations.append_to_jsonl(
-            f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
-        )
+        for i in trange(len(MSR_df)):
+            secure_code = str(MSR_df.iloc[i][before_func_col])
+            vulnerable_code = str(MSR_df.iloc[i][after_func_col])
+            cwe = str(MSR_df.iloc[i][cwe_col])
+            file_extension = str(MSR_df.iloc[i][file_ext_col])
+            vuln_id = str(MSR_df.iloc[i][vuln_id_col])
+
+            if vuln_id in skypped_vuln_ids:
+                continue
+
+            max_tokens = max(
+                model.to_tokens(secure_code, prepend_bos=True).shape[1],
+                model.to_tokens(vulnerable_code, prepend_bos=True).shape[1],
+            )
+            if max_tokens > 2000:
+                warn_msg = f"Skipping vuln_id {MSR_df.iloc[i][vuln_id_col]} due to max tokens {max_tokens} exceeding limit."
+                logger.warning(warn_msg)
+                log_warning(warn_msg, logger_filepath)
+                skypped_vuln_ids.add(vuln_id)
+                continue
+
+            _, cache = model.run_with_cache_with_saes([secure_code], saes=[sae])
+            index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
+            feature_activation_df = pd.DataFrame(
+                cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
+                .cpu()
+                .numpy(),
+                index=index,
+            )
+            feature_activation_df.columns = ["vulnerable"]
+            del cache
+            torch.cuda.empty_cache()
+
+            _, cache = model.run_with_cache_with_saes([vulnerable_code], saes=[sae])
+            index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
+
+            feature_activation_df["secure"] = (
+                cache["blocks" + "." + str(layer) + "." + CACHE_COMPONENT][0, -1, :]
+                .cpu()
+                .numpy()
+            )
+            del cache
+            torch.cuda.empty_cache()
+
+            safe_values = feature_activation_df["secure"].values
+            vuln_values = feature_activation_df["vulnerable"].values
+
+            base64_secure = base64.b64encode(safe_values.tobytes()).decode("utf-8")
+            base64_vulnerable = base64.b64encode(vuln_values.tobytes()).decode("utf-8")
+
+            activations = ActivationsSchema(
+                vuln_id=vuln_id,
+                secure_code=secure_code,
+                vulnerable_code=vulnerable_code,
+                secure=safe_values.tolist(),
+                vulnerable=vuln_values.tolist(),
+                layer=layer,
+                sae_config=cfg,
+                cwe=cwe,
+                file_extension=file_extension,
+            )
+
+            activations.append_to_jsonl(
+                f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
+            )
