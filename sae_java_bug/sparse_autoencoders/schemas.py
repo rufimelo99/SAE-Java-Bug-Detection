@@ -27,6 +27,7 @@ class Release(str, Enum):
 class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
     HOOK_RESID_SAE_ACTS_POST = "hook_resid_post.hook_sae_acts_post"
+    HOOK_RESID_SAE_ACTS_PRE = "hook_resid_post.hook_sae_acts_pre"
 
 
 # -------------------------------
@@ -38,7 +39,7 @@ def gpt2_resid_pre_layers(n=12):
     return [f"blocks.{i}.hook_resid_pre" for i in range(n)]
 
 
-def gemma_canonical_layers(n=26):
+def gemma_canonical_layers(n=25):
     return [f"layer_{i}/width_16k/canonical" for i in range(n)]
 
 

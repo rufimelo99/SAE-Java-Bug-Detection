@@ -11,6 +11,8 @@ from fancy_einsum import einsum
 from jaxtyping import Float
 from transformer_lens import ActivationCache
 
+from sae_java_bug.logger import logger
+
 
 def imshow(tensor, **kwargs):
     fig = px.imshow(
@@ -126,3 +128,18 @@ def set_seed(seed: int = 42):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
+
+
+def get_device(verbose: bool = True) -> str:
+    """
+    Get the device to be used for training.
+    """
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    if verbose:
+        logger.info("Getting device.", device=device)
+    return device

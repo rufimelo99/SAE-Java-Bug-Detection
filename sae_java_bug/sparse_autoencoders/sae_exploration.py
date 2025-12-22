@@ -76,7 +76,7 @@ MSR_df = load_dataset(hf_path, split="train").to_pandas()
 cfg = SAEConfig(
     model=ModelFamily.GEMMA,
     release=Release.GEMMA_SCOPE,
-    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_PRE,
     layers_available=[i for i in range(26)],
 )
 
