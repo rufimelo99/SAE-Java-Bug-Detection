@@ -11,6 +11,7 @@ from sae_java_bug.logger import logger
 class ModelFamily(str, Enum):
     GPT2 = "gpt2"
     GEMMA = "google/gemma-2-2b"
+    GEMMA3 = "google/gemma-3-1b"
     LLAMA = "llama"
     DEEPSEEK = "meta-llama/Llama-3.1-8B"
     PYTHIA = "pythia-70m-deduped"
@@ -19,6 +20,7 @@ class ModelFamily(str, Enum):
 class Release(str, Enum):
     GPT2_JB = "gpt2-small-res-jb"
     GEMMA_SCOPE = "gemma-scope-2b-pt-res-canonical"
+    GEMMA3 = "gemma-3-1b-res-matryoshka-dc"
     LLAMA_SCOPE = "llama_scope_lxr_32x"
     DEEPSEEK_BASE = "llama_scope_r1_distill"
     PYTHIA_70M = "pythia-70m-deduped-res-sm"
@@ -42,6 +44,8 @@ def gpt2_resid_pre_layers(n=12):
 def gemma_canonical_layers(n=25):
     return [f"layer_{i}/width_16k/canonical" for i in range(n)]
 
+def gemma3_matryoshka_layers(n=25):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
 
 def llama_scope_layers(n=32):
     return [f"l{i}r_32x" for i in range(n)]
@@ -65,6 +69,9 @@ SAE_REGISTRY = {
     },
     ModelFamily.GEMMA: {
         Release.GEMMA_SCOPE: gemma_canonical_layers(26),
+    },
+    ModelFamily.GEMMA3: {
+        Release.GEMMA3: gemma3_matryoshka_layers(25),
     },
     ModelFamily.LLAMA: {
         Release.LLAMA_SCOPE: llama_scope_layers(32),
