@@ -44,8 +44,10 @@ def gpt2_resid_pre_layers(n=12):
 def gemma_canonical_layers(n=25):
     return [f"layer_{i}/width_16k/canonical" for i in range(n)]
 
+
 def gemma3_matryoshka_layers(n=25):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
 
 def llama_scope_layers(n=32):
     return [f"l{i}r_32x" for i in range(n)]
