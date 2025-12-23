@@ -187,14 +187,13 @@ if __name__ == "__main__":
             )
             feature_activation_df["secure"] = secure_features
 
-            # Optionally base64 encode
-            base64_secure = base64.b64encode(secure_features.tobytes()).decode("utf-8")
-            base64_vuln = base64.b64encode(vuln_features.tobytes()).decode("utf-8")
+            base64_secure = base64.b64encode(secure_code.encode("utf-8"))
+            base64_vuln = base64.b64encode(vulnerable_code.encode("utf-8"))
 
             activations = ActivationsSchema(
                 vuln_id=vuln_id,
-                secure_code=secure_code,
-                vulnerable_code=vulnerable_code,
+                secure_code=base64_secure,
+                vulnerable_code=base64_vuln,
                 secure=secure_features.tolist(),
                 vulnerable=vuln_features.tolist(),
                 layer=layer,

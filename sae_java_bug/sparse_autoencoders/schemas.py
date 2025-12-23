@@ -11,7 +11,7 @@ from sae_java_bug.logger import logger
 class ModelFamily(str, Enum):
     GPT2 = "gpt2"
     GEMMA = "google/gemma-2-2b"
-    GEMMA3 = "google/gemma-3-1b"
+    GEMMA3 = "google/gemma-3-1b-pt"
     LLAMA = "llama"
     DEEPSEEK = "meta-llama/Llama-3.1-8B"
     PYTHIA = "pythia-70m-deduped"
