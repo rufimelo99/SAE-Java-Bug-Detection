@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from sae_java_bug.logger import logger
-
 # -------------------------------
 # High-level model family enums
 # -------------------------------

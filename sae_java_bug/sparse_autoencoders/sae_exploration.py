@@ -110,17 +110,18 @@ def get_residuals(code_str: str, layer_idx: int, tokenizer, model, device=None):
     with torch.no_grad():
         outputs = model(**inputs, output_hidden_states=True)
 
-    # hidden_states is tuple of length (num_layers + 1)
+    # hidden_states is tuple of length (num_layers + 1).
     # Index 0: embeddings, Index 1..N: each transformer layer output
     if layer_idx < 0 or layer_idx >= len(outputs.hidden_states):
         raise ValueError(
             f"layer_idx {layer_idx} out of range. Model has {len(outputs.hidden_states)} hidden states."
         )
 
-    # shape [batch_size=1, seq_len, hidden_dim]
-    residuals = outputs.hidden_states[layer_idx]
+    residuals: Float[torch.Tensor, "1 seq_len hidden_dim"] = outputs.hidden_states[
+        layer_idx
+    ]
 
-    # Return last token's residual
+    # Returns last token's residual.
     return residuals[:, -1, :]
 
 
@@ -149,7 +150,6 @@ if __name__ == "__main__":
             if vuln_id in skipped_vuln_ids:
                 continue
 
-            # Tokenization length check
             max_tokens = max(
                 len(tokenizer(secure_code, return_tensors="pt")["input_ids"][0]),
                 len(tokenizer(vulnerable_code, return_tensors="pt")["input_ids"][0]),
@@ -161,8 +161,8 @@ if __name__ == "__main__":
                 skipped_vuln_ids.add(vuln_id)
                 continue
 
-            # Extract residuals manually
-            layer_after_embeddings = layer + 1  # since 0 is embeddings
+            # Extract residuals manually.
+            layer_after_embeddings = layer + 1
 
             resid_secure = get_residuals(
                 secure_code, layer_after_embeddings, tokenizer, model
@@ -171,7 +171,6 @@ if __name__ == "__main__":
                 vulnerable_code, layer_after_embeddings, tokenizer, model
             )
 
-            # SAE encode
             secure_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(
                 resid_secure
             ).cpu()
@@ -179,7 +178,6 @@ if __name__ == "__main__":
             vuln_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(resid_vuln).cpu()
             vuln_features = einops.rearrange(vuln_features, "1 d_sae -> d_sae")
 
-            # Store in DataFrame
             index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
 
             feature_activation_df = pd.DataFrame(
