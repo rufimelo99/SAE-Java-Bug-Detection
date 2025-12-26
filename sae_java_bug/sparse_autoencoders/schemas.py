@@ -85,6 +85,9 @@ SAE_REGISTRY = {
     ModelFamily.PYTHIA: {
         Release.PYTHIA_70M: pythia_70m_layers(6),
     },
+    ModelFamily.LLAMA_3_1_8B_INST: {
+        Release.LLAMA_3_1_8B_INST: llama_3_1_8b_inst_layers([19]),
+    },
 }
 
 
