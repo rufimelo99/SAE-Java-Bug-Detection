@@ -51,8 +51,8 @@ def gemma3_matryoshka_layers(n=25):
 def llama_scope_layers(n=32):
     return [f"l{i}r_32x" for i in range(n)]
 
-def llama_3_1_8b_inst_layers(layers=[19]):
-    return [f"layer_{i}" for i in layers]
+def llama_3_1_8b_inst_layers(n=20):
+    return [f"layer_{i}" for i in range(n)]
 
 def deepseek_distill_layers(n=32):
     return [f"l{i}r_400m_slimpajama_400m_openr1_math" for i in range(n)]
@@ -86,7 +86,7 @@ SAE_REGISTRY = {
         Release.PYTHIA_70M: pythia_70m_layers(6),
     },
     ModelFamily.LLAMA_3_1_8B_INST: {
-        Release.LLAMA_3_1_8B_INST: llama_3_1_8b_inst_layers([19]),
+        Release.LLAMA_3_1_8B_INST: llama_3_1_8b_inst_layers(20),
     },
 }
 
@@ -131,5 +131,5 @@ LLAMA_3_1_8B_INST_CONFIG = SAEConfig(
     model=ModelFamily.LLAMA_3_1_8B_INST,
     release=Release.LLAMA_3_1_8B_INST,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_PRE,
-    layers_available=[19],
+    layers_available=[19], # Only layer 19 is available.
 )
