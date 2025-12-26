@@ -21,6 +21,7 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     ModelFamily,
     Release,
     SAEConfig,
+    LLAMA_3_1_8B_INST_CONFIG,
 )
 
 
@@ -69,12 +70,7 @@ logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 MSR_df = load_dataset(hf_path, split="train").to_pandas()
 
-cfg = SAEConfig(
-    model=ModelFamily.GEMMA3,
-    release=Release.GEMMA3,
-    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_PRE,
-    layers_available=[i for i in range(26)],
-)
+cfg = LLAMA_3_1_8B_INST_CONFIG
 
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value
