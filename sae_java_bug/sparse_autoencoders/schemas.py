@@ -51,8 +51,8 @@ def gemma3_matryoshka_layers(n=25):
 def llama_scope_layers(n=32):
     return [f"l{i}r_32x" for i in range(n)]
 
-def llama_3_1_8b_inst_layers(nlayers=[19]):
-    return [f"layer_{i}" for i in range(nlayers)]
+def llama_3_1_8b_inst_layers(layers=[19]):
+    return [f"layer_{i}" for i in layers]
 
 def deepseek_distill_layers(n=32):
     return [f"l{i}r_400m_slimpajama_400m_openr1_math" for i in range(n)]
