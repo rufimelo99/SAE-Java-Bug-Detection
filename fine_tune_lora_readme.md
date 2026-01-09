@@ -1,6 +1,6 @@
 # LoRA Fine-Tuning Script Walkthrough
 
-I have implemented a script [fine_tune_lora.py](file:///Users/shashankaluru/SAE-Java-Bug-Detection/fine_tune_lora.py) that allows you to fine-tune a Hugging Face model using LoRA on a specified dataset.
+This is a script [fine_tune_lora.py](./fine_tune_lora.py) that allows you to fine-tune a Hugging Face model using LoRA on a specified dataset.
 
 ## Setup
 
