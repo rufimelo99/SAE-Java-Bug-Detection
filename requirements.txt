@@ -11,3 +11,8 @@ transformers
 pre-commit
 transformer_lens
 circuitsvis
+peft
+datasets
+trl
+bitsandbytes
+accelerate
