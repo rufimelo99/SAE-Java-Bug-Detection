@@ -185,3 +185,4 @@ cython_debug/
 /sae_java_bug/sparse_autoencoders/answerdotai_ModernBERT-large_artifacts_gbug-java.csv_best_model
 /sae_java_bug/sparse_autoencoders/answerdotai_ModernBERT-large_artifacts_humaneval.csv_best_model
 /sae_java_bug/sparse_autoencoders/baselines/modern_bert_model
+/sae_java_bug/artifacts/sae_KodCode_llama-3.2-1b-instruct-blocks.0.hook_resid_post

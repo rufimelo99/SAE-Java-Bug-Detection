@@ -21,7 +21,7 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     ModelFamily,
     Release,
     SAEConfig,
-    LLAMA_3_1_8B_INST_CONFIG,
+    GEMMA3_CONFIG,
 )
 
 
@@ -56,12 +56,18 @@ device = (
 )
 logger.info("Getting device.", device=device)
 
-hf_path = "rufimelo/DeltaSecommits"
-before_func_col = "prior_version"
-after_func_col = "after_version"
-vuln_id_col = "vuln_id"
-cwe_col = "cwe"
-file_ext_col = "file_extension"
+# hf_path = "rufimelo/DeltaSecommits"
+# before_func_col = "prior_version"
+# after_func_col = "after_version"
+# vuln_id_col = "vuln_id"
+# cwe_col = "cwe"
+# file_ext_col = "file_extension"
+hf_path = "rufimelo/ETHPy150Open_swapped_operand"
+before_func_col = "buggy_version"
+after_func_col = "correct_version"
+vuln_id_col = "info" # placeholder since no vuln_id in this dataset
+cwe_col = "info" # placeholder since no vuln_id in this dataset
+file_ext_col = "info" # placeholder since no vuln_id in this dataset
 
 output_dir = "../artifacts/activations/"
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -70,7 +76,7 @@ logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 MSR_df = load_dataset(hf_path, split="train").to_pandas()
 
-cfg = LLAMA_3_1_8B_INST_CONFIG
+cfg = GEMMA3_CONFIG
 
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value
@@ -135,8 +141,8 @@ if __name__ == "__main__":
         sae, cfg_dict, sparsity = SAE.from_pretrained(
             release=RELEASE, sae_id=SAE_ID, device=device
         )
-
-        for i in trange(len(MSR_df)):
+        # for i in trange(len(MSR_df)):
+        for i in trange(200):  # Limit to 200 samples for faster testing
             secure_code = str(MSR_df.iloc[i][before_func_col])
             vulnerable_code = str(MSR_df.iloc[i][after_func_col])
             cwe = str(MSR_df.iloc[i][cwe_col])
