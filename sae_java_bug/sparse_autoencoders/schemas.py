@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Optional
 
 # -------------------------------
 # High-level model family enums
@@ -12,6 +14,7 @@ class ModelFamily(str, Enum):
     GEMMA3 = "google/gemma-3-1b-pt"
     LLAMA = "llama"
     LLAMA_3_1_8B_INST = "meta-llama/Llama-3.1-8B-Instruct"
+    LLAMA_3_2_1B_INST = "meta-llama/Llama-3.2-1B-Instruct"
     DEEPSEEK = "meta-llama/Llama-3.1-8B"
     PYTHIA = "pythia-70m-deduped"
 
@@ -23,6 +26,7 @@ class Release(str, Enum):
     LLAMA_3_1_8B_INST = "goodfire-llama-3.1-8b-instruct"
     LLAMA_SCOPE = "llama_scope_lxr_32x"
     DEEPSEEK_BASE = "llama_scope_r1_distill"
+    LLAMA_3_2_1B_INST_CUSTOM = "N/A"
     PYTHIA_70M = "pythia-70m-deduped-res-sm"
 
 class CachedComponent(str, Enum):
@@ -62,6 +66,10 @@ def pythia_70m_layers(n=6):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
 
 
+def kodcode_llama_3_2_1b_layers(n=16):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
+
 # -------------------------------
 # Central registry
 # -------------------------------
@@ -88,6 +96,9 @@ SAE_REGISTRY = {
     ModelFamily.LLAMA_3_1_8B_INST: {
         Release.LLAMA_3_1_8B_INST: llama_3_1_8b_inst_layers(20),
     },
+    ModelFamily.LLAMA_3_2_1B_INST: {
+        Release.LLAMA_3_2_1B_INST_CUSTOM: kodcode_llama_3_2_1b_layers(16),
+    },
 }
 
 
@@ -102,8 +113,13 @@ class SAEConfig:
     release: Release
     cached_component: CachedComponent
     layers_available: list[int]
+    local_path_template: Optional[str] = field(default=None)
 
-    def sae_id(self, layer_index) -> str:
+    @property
+    def is_local(self) -> bool:
+        return self.local_path_template is not None
+
+    def sae_id(self, layer_index: int) -> str:
         try:
             return SAE_REGISTRY[self.model][self.release][layer_index]
         except (KeyError, IndexError):
@@ -111,11 +127,19 @@ class SAEConfig:
                 f"Invalid configuration: {self.model=} {self.release=} {layer_index=}"
             )
 
+    def sae_path(self, layer_index: int) -> Path:
+        """Returns the local path to load the SAE from disk."""
+        if not self.is_local:
+            raise ValueError("SAE is not configured for local loading")
+        sae_id = self.sae_id(layer_index)
+        return Path(self.local_path_template.format(sae_id=sae_id))
+
     def __str__(self):
         return (
             f"SAEConfig(model={self.model}, "
             f"release={self.release}, "
             f"component={self.cached_component}, "
+            f"is_local={self.is_local})"
         )
 
 
@@ -132,4 +156,13 @@ LLAMA_3_1_8B_INST_CONFIG = SAEConfig(
     release=Release.LLAMA_3_1_8B_INST,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_PRE,
     layers_available=[19], # Only layer 19 is available.
+)
+
+
+KODCODE_LLAMA_3_2_1B_CONFIG = SAEConfig(
+    model=ModelFamily.LLAMA_3_2_1B_INST,
+    release=Release.LLAMA_3_2_1B_INST_CUSTOM,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[0],  # Currently only layer 0 is available.
+    local_path_template="sae_java_bug/artifacts/sae_KodCode_llama-3.2-1b-instruct-{sae_id}",
 )
