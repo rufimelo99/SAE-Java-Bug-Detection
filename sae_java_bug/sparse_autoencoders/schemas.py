@@ -17,6 +17,7 @@ class ModelFamily(str, Enum):
     LLAMA_3_2_1B_INST = "meta-llama/Llama-3.2-1B-Instruct"
     DEEPSEEK = "meta-llama/Llama-3.1-8B"
     PYTHIA = "pythia-70m-deduped"
+    CODE_LLAMA = "codellama/CodeLlama-7b-hf"
 
 
 class Release(str, Enum):
@@ -26,8 +27,9 @@ class Release(str, Enum):
     LLAMA_3_1_8B_INST = "goodfire-llama-3.1-8b-instruct"
     LLAMA_SCOPE = "llama_scope_lxr_32x"
     DEEPSEEK_BASE = "llama_scope_r1_distill"
-    LLAMA_3_2_1B_INST_CUSTOM = "N/A"
     PYTHIA_70M = "pythia-70m-deduped-res-sm"
+    LLAMA_3_2_1B_INST_CUSTOM = "N/A"
+    CODE_LLAMA_7B_HF_CUSTOM = "N/A"
 
 class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
@@ -69,6 +71,9 @@ def pythia_70m_layers(n=6):
 def kodcode_llama_3_2_1b_layers(n=16):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
 
+def kodcode_code_llama_layers(n=16):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
 
 # -------------------------------
 # Central registry
@@ -98,6 +103,9 @@ SAE_REGISTRY = {
     },
     ModelFamily.LLAMA_3_2_1B_INST: {
         Release.LLAMA_3_2_1B_INST_CUSTOM: kodcode_llama_3_2_1b_layers(16),
+    },
+    ModelFamily.CODE_LLAMA: {
+        Release.CODE_LLAMA_7B_HF_CUSTOM: kodcode_code_llama_layers(16),
     },
 }
 
@@ -141,6 +149,15 @@ class SAEConfig:
             f"component={self.cached_component}, "
             f"is_local={self.is_local})"
         )
+    
+    def model_dump(self) -> dict:
+        return {
+            "model": self.model.value,
+            "release": self.release.value,
+            "cached_component": self.cached_component.value,
+            "layers_available": self.layers_available,
+            "local_path_template": self.local_path_template,
+        }
 
 
 GEMMA3_CONFIG = SAEConfig(
@@ -164,5 +181,13 @@ KODCODE_LLAMA_3_2_1B_CONFIG = SAEConfig(
     release=Release.LLAMA_3_2_1B_INST_CUSTOM,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
     layers_available=[0],  # Currently only layer 0 is available.
-    local_path_template="sae_java_bug/artifacts/sae_KodCode_llama-3.2-1b-instruct-{sae_id}",
+    local_path_template="../artifacts/sae_KodCode_llama-3.2-1b-instruct-{sae_id}",
+)
+
+KODCODE_CODE_LLAMA_7B_CONFIG = SAEConfig(
+    model=ModelFamily.CODE_LLAMA,
+    release=Release.CODE_LLAMA_7B_HF_CUSTOM,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[0],  # Currently only layer 0 is available.
+    local_path_template="../artifacts/sae_KodCode_codellama-7b-hf_tokenized_{sae_id}",
 )
