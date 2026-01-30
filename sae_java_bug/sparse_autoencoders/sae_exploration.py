@@ -24,6 +24,7 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     GEMMA3_CONFIG,
     KODCODE_LLAMA_3_2_1B_CONFIG,
     KODCODE_CODE_LLAMA_7B_CONFIG,
+    QWEN_CODER_7B_BLOCK_0_CONFIG,
 )
 
 
@@ -78,7 +79,7 @@ logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 MSR_df = load_dataset(hf_path, split="train").to_pandas()
 
-cfg = KODCODE_CODE_LLAMA_7B_CONFIG
+cfg = QWEN_CODER_7B_BLOCK_0_CONFIG
 
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value

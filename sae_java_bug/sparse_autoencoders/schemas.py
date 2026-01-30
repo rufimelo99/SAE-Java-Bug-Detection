@@ -18,7 +18,7 @@ class ModelFamily(str, Enum):
     DEEPSEEK = "meta-llama/Llama-3.1-8B"
     PYTHIA = "pythia-70m-deduped"
     CODE_LLAMA = "codellama/CodeLlama-7b-hf"
-
+    QWEN_CODER = "Qwen/Qwen2.5-7B-Instruct"
 
 class Release(str, Enum):
     GPT2_JB = "gpt2-small-res-jb"
@@ -30,6 +30,7 @@ class Release(str, Enum):
     PYTHIA_70M = "pythia-70m-deduped-res-sm"
     LLAMA_3_2_1B_INST_CUSTOM = "N/A"
     CODE_LLAMA_7B_HF_CUSTOM = "N/A"
+    QWEN_CODER_7B_CUSTOM_BLOCK_0 = "rufimelo/secure_code_qwen_coder_block_0_hook_resid_post_16384"
 
 class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
@@ -74,6 +75,9 @@ def kodcode_llama_3_2_1b_layers(n=16):
 def kodcode_code_llama_layers(n=16):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
 
+def qwen_coder_7b_block_0_layers(n=16):
+    return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
 
 # -------------------------------
 # Central registry
@@ -106,6 +110,9 @@ SAE_REGISTRY = {
     },
     ModelFamily.CODE_LLAMA: {
         Release.CODE_LLAMA_7B_HF_CUSTOM: kodcode_code_llama_layers(16),
+    },
+    ModelFamily.QWEN_CODER: {
+        Release.QWEN_CODER_7B_CUSTOM_BLOCK_0: qwen_coder_7b_block_0_layers(16),
     },
 }
 
@@ -190,4 +197,11 @@ KODCODE_CODE_LLAMA_7B_CONFIG = SAEConfig(
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
     layers_available=[0],  # Currently only layer 0 is available.
     local_path_template="../artifacts/sae_KodCode_codellama-7b-hf_tokenized_{sae_id}",
+)
+
+QWEN_CODER_7B_BLOCK_0_CONFIG = SAEConfig(
+    model=ModelFamily.QWEN_CODER,
+    release=Release.QWEN_CODER_7B_CUSTOM_BLOCK_0,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[0],
 )

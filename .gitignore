@@ -188,3 +188,5 @@ cython_debug/
 /sae_java_bug/artifacts/sae_KodCode_llama-3.2-1b-instruct-blocks.0.hook_resid_post
 /sae_java_bug/artifacts/sae_KodCode_codellama-7b-hf_tokenized_blocks.0.hook_resid_post
 *.png
+/sae_java_bug/artifacts/activations/run_20260128_184854
+/sae_java_bug/artifacts/sae_DeltaSecommits_qwen_coder_blocks.0.hook_resid_post
