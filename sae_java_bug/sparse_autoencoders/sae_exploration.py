@@ -24,7 +24,7 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     GEMMA3_CONFIG,
     KODCODE_LLAMA_3_2_1B_CONFIG,
     KODCODE_CODE_LLAMA_7B_CONFIG,
-    QWEN_CODER_7B_BLOCK_0_CONFIG,
+    QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG,
 )
 
 
@@ -72,14 +72,14 @@ file_ext_col = "file_extension"
 # cwe_col = "info" # placeholder since no vuln_id in this dataset
 # file_ext_col = "info" # placeholder since no vuln_id in this dataset
 
+cfg = QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG
+
 output_dir = "../artifacts/activations/"
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = os.path.join(output_dir, f"run_{current_time}/")
+output_dir = os.path.join(output_dir, f"run_{current_time}_{cfg.release.value}/")
 logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 MSR_df = load_dataset(hf_path, split="train").to_pandas()
-
-cfg = QWEN_CODER_7B_BLOCK_0_CONFIG
 
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value
