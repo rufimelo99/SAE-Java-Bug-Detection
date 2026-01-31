@@ -31,6 +31,8 @@ class Release(str, Enum):
     LLAMA_3_2_1B_INST_CUSTOM = "N/A"
     CODE_LLAMA_7B_HF_CUSTOM = "N/A"
     QWEN_CODER_7B_CUSTOM_BLOCK_0 = "rufimelo/secure_code_qwen_coder_block_0_hook_resid_post_16384"
+    QWEN_CODER_7B_CUSTOM_BLOCK_14 = "rufimelo/secure_code_qwen_coder_block_14_hook_resid_post_16384"
+    QWEN_CODER_7B_CUSTOM_BLOCK_27 = "rufimelo/secure_code_qwen_coder_block_27_hook_resid_post_16384"
 
 class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
@@ -75,8 +77,9 @@ def kodcode_llama_3_2_1b_layers(n=16):
 def kodcode_code_llama_layers(n=16):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
 
-def qwen_coder_7b_block_0_layers(n=16):
+def qwen_coder_7b_layers(n=16):
     return [f"blocks.{i}.hook_resid_post" for i in range(n)]
+
 
 
 # -------------------------------
@@ -112,7 +115,13 @@ SAE_REGISTRY = {
         Release.CODE_LLAMA_7B_HF_CUSTOM: kodcode_code_llama_layers(16),
     },
     ModelFamily.QWEN_CODER: {
-        Release.QWEN_CODER_7B_CUSTOM_BLOCK_0: qwen_coder_7b_block_0_layers(16),
+        Release.QWEN_CODER_7B_CUSTOM_BLOCK_0: qwen_coder_7b_layers(16),
+    },
+    ModelFamily.QWEN_CODER: {
+        Release.QWEN_CODER_7B_CUSTOM_BLOCK_14: qwen_coder_7b_layers(16),
+    },
+    ModelFamily.QWEN_CODER: {
+        Release.QWEN_CODER_7B_CUSTOM_BLOCK_27: qwen_coder_7b_layers(16),
     },
 }
 
@@ -204,4 +213,17 @@ QWEN_CODER_7B_BLOCK_0_CONFIG = SAEConfig(
     release=Release.QWEN_CODER_7B_CUSTOM_BLOCK_0,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
     layers_available=[0],
+)
+
+QWEN_CODER_7B_BLOCK_14_CONFIG = SAEConfig(
+    model=ModelFamily.QWEN_CODER,
+    release=Release.QWEN_CODER_7B_CUSTOM_BLOCK_14,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[14],
+)
+QWEN_CODER_7B_BLOCK_27_CONFIG = SAEConfig(
+    model=ModelFamily.QWEN_CODER,
+    release=Release.QWEN_CODER_7B_CUSTOM_BLOCK_27,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[27],
 )
