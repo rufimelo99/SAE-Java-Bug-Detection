@@ -114,8 +114,6 @@ SAE_REGISTRY = {
     },
     ModelFamily.QWEN_CODER: {
         Release.QWEN_CODER_7B_SECURE_CODE_STRD: qwen_coder_7b_layers(28),
-    },
-    ModelFamily.QWEN_CODER: {
         Release.QWEN_CODER_7B_SECURE_CODE_GATED: qwen_coder_7b_layers(28),
     },
 }
