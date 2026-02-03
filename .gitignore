@@ -191,3 +191,4 @@ cython_debug/
 /sae_java_bug/artifacts/activations/run_20260128_184854
 /sae_java_bug/artifacts/sae_DeltaSecommits_qwen_coder_blocks.0.hook_resid_post
 /sae_java_bug/artifacts/activations/run_20260131_190935_rufimelo_secure_code_qwen_coder_strd_16384
+*.pdf
