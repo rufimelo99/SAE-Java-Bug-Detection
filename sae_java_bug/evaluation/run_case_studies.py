@@ -21,6 +21,8 @@ import torch
 from scipy.stats import wilcoxon
 from tqdm import tqdm
 
+from sae_java_bug.evaluation.token_visualization import generate_case_study_report
+
 
 RUN_ID = "run_20260202_220441_rufimelo_secure_code_qwen_coder_topk_16384"
 ACTIVATION_DIR = "sae_java_bug/artifacts/activations"
@@ -319,6 +321,37 @@ def main():
     for cwe in sorted(cwe_counts.keys(), key=lambda c: cwe_counts[c], reverse=True):
         rate = cwe_counts[cwe] / cwe_total[cwe] * 100
         print(f"{cwe:<12} {cwe_counts[cwe]:<10} {cwe_total[cwe]:<10} {rate:<8.1f}%")
+
+    # ── VISUALIZATION: Generate HTML reports for top case studies ──────
+    print(f"\n{'='*80}")
+    print("GENERATING VISUALIZATIONS")
+    print(f"{'='*80}")
+    
+    try:
+        generated_files = generate_case_study_report(
+            metadata_list=metadata,
+            secure_features_list=[s.tolist() for s in secure_act],
+            vulnerable_features_list=[v.tolist() for v in vuln_act],
+            secure_scores=secure_scores,
+            vulnerable_scores=vuln_scores,
+            deltas=deltas,
+            invariants=invariants,
+            violated_indices_per_sample=vuln_violations,
+            output_dir="sae_java_bug/artifacts/visualizations/",
+            num_cases=15,
+        )
+        
+        print(f"  Generated {len(generated_files)} HTML reports")
+        print(f"\n  Output directory: sae_java_bug/artifacts/visualizations/")
+        print(f"\n  Reports generated:")
+        for filepath in generated_files[:5]:
+            print(f"    - {filepath}")
+        if len(generated_files) > 5:
+            print(f"    ... and {len(generated_files) - 5} more")
+    except Exception as e:
+        print(f"  Error generating visualizations: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
