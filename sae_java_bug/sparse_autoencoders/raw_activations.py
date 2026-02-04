@@ -28,7 +28,7 @@ class RawActivationsSchema(BaseModel):
     secure: List[float]
     vulnerable: List[float]
     layer: int
-    model_config: dict
+    sae_config: dict
     component: str
 
     def append_to_jsonl(self, filepath: str):
@@ -176,7 +176,7 @@ def run(cfg: SAEConfig):
                 secure=secure_residuals.tolist(),
                 vulnerable=vuln_residuals.tolist(),
                 layer=layer,
-                model_config=cfg.model_dump(),
+                sae_config=cfg.model_dump(),
                 cwe=cwe,
                 file_extension=file_extension,
                 component=component,
