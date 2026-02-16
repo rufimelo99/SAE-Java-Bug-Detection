@@ -33,6 +33,7 @@ class Release(str, Enum):
     QWEN_CODER_7B_SECURE_CODE_STRD = "rufimelo/secure_code_qwen_coder_strd_16384"
     QWEN_CODER_7B_SECURE_CODE_GATED = "rufimelo/secure_code_qwen_coder_gated_16384"
     QWEN_CODER_7B_SECURE_CODE_TOPK = "rufimelo/secure_code_qwen_coder_topk_16384"
+    QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE = "rufimelo/cl_secure_code_qwen_coder_topk_16384"
     
 class CachedComponent(str, Enum):
     HOOK_SAE_ACTS_POST = "hook_resid_pre.hook_sae_acts_post"
@@ -118,6 +119,7 @@ SAE_REGISTRY = {
         Release.QWEN_CODER_7B_SECURE_CODE_STRD: qwen_coder_7b_layers(28),
         Release.QWEN_CODER_7B_SECURE_CODE_GATED: qwen_coder_7b_layers(28),
         Release.QWEN_CODER_7B_SECURE_CODE_TOPK: qwen_coder_7b_layers(28),
+        Release.QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE: qwen_coder_7b_layers(28),
     },
 }
 
@@ -223,4 +225,11 @@ QWEN_CODER_7B_SECURE_CODE_TOPK_CONFIG = SAEConfig(
     release=Release.QWEN_CODER_7B_SECURE_CODE_TOPK,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
     layers_available=[0, 14, 27],
+)
+
+QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE_CONFIG = SAEConfig(
+    model=ModelFamily.QWEN_CODER,
+    release=Release.QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE,
+    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
+    layers_available=[14],
 )
