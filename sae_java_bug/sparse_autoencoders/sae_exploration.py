@@ -21,6 +21,10 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     ModelFamily,
     Release,
     SAEConfig,
+    GEMMA3_CONFIG,
+    KODCODE_LLAMA_3_2_1B_CONFIG,
+    KODCODE_CODE_LLAMA_7B_CONFIG,
+    QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG,
 )
 
 
@@ -61,20 +65,21 @@ after_func_col = "after_version"
 vuln_id_col = "vuln_id"
 cwe_col = "cwe"
 file_ext_col = "file_extension"
+# hf_path = "rufimelo/ETHPy150Open_swapped_operand"
+# before_func_col = "buggy_version"
+# after_func_col = "correct_version"
+# vuln_id_col = "info" # placeholder since no vuln_id in this dataset
+# cwe_col = "info" # placeholder since no vuln_id in this dataset
+# file_ext_col = "info" # placeholder since no vuln_id in this dataset
+
+cfg = QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG
 
 output_dir = "../artifacts/activations/"
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = os.path.join(output_dir, f"run_{current_time}/")
+output_dir = os.path.join(output_dir, f"run_{current_time}_{cfg.release.value}/")
 logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
 
 MSR_df = load_dataset(hf_path, split="train").to_pandas()
-
-cfg = SAEConfig(
-    model=ModelFamily.GEMMA3,
-    release=Release.GEMMA3,
-    cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_PRE,
-    layers_available=[i for i in range(26)],
-)
 
 MODEL_ARG = cfg.model.value
 RELEASE = cfg.release.value
@@ -136,11 +141,14 @@ if __name__ == "__main__":
 
     for layer in tqdm(cfg.layers_available):
         SAE_ID = cfg.sae_id(layer_index=layer)
-        sae, cfg_dict, sparsity = SAE.from_pretrained(
-            release=RELEASE, sae_id=SAE_ID, device=device
-        )
-
+        if cfg.is_local:
+            sae,  cfg_dict, sparsity  = SAE.load_from_disk(cfg.sae_path(layer_index=layer), device=device)
+        else:
+            sae, cfg_dict, sparsity = SAE.from_pretrained(
+                release=RELEASE, sae_id=SAE_ID, device=device
+            )
         for i in trange(len(MSR_df)):
+        #for i in trange(200):  # Limit to 200 samples for faster testing
             secure_code = str(MSR_df.iloc[i][before_func_col])
             vulnerable_code = str(MSR_df.iloc[i][after_func_col])
             cwe = str(MSR_df.iloc[i][cwe_col])
@@ -203,5 +211,12 @@ if __name__ == "__main__":
             activations.append_to_jsonl(
                 f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
             )
+            logger.info(
+                f"Saved activations for vuln_id {vuln_id} at layer {layer} with SAE {SAE_ID} to disk at `{output_dir}`."
+            )
+            
 
             torch.cuda.empty_cache()
+    # Store a new file with the config used
+    with open(f"{output_dir}sae_config_used.json", "w") as f:
+        f.write(json.dumps(cfg.model_dump(), indent=4))
