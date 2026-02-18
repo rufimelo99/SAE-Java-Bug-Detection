@@ -122,6 +122,7 @@ SAE_REGISTRY = {
         Release.QWEN_CODER_7B_SECURE_CODE_TOPK: qwen_coder_7b_layers(28),
         Release.QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE: qwen_coder_7b_layers(28),
         Release.QWEN_CODER_7B_VULNEABLE_CODE_STD_1M: qwen_coder_7b_layers(28),
+        Release.QWEN_CODER_7B_VULNEABLE_CODE_STD_10M: qwen_coder_7b_layers(28),
     },
 }
 
