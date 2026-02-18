@@ -14,7 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from sae_java_bug.logger import logger
 from sae_java_bug.sparse_autoencoders.schemas import (
-    QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG,
+    QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE_CONFIG,
     SAEConfig,
 )
 
@@ -187,9 +187,9 @@ def run(cfg: SAEConfig):
             )
             logger.info(
                 "Saved raw activations for vuln_id %s at layer %s to disk at `%s`.",
-                vuln_id,
-                layer,
-                output_dir,
+                vuln_id=vuln_id,
+                layer=layer,
+                output_dir=output_dir,
             )
 
             if device == "cuda":
@@ -200,4 +200,4 @@ def run(cfg: SAEConfig):
 
 
 if __name__ == "__main__":
-    run(QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG)
+    run(QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE_CONFIG)
