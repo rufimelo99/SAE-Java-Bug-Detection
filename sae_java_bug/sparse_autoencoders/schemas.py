@@ -247,5 +247,5 @@ QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG = SAEConfig(
     model=ModelFamily.QWEN_CODER,
     release=Release.QWEN_CODER_7B_VULNEABLE_CODE_STD_10M,
     cached_component=CachedComponent.HOOK_RESID_SAE_ACTS_POST,
-    layers_available=[0, 14, 27],
+    layers_available=[11],
 )
