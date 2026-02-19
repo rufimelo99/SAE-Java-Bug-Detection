@@ -24,7 +24,8 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     GEMMA3_CONFIG,
     KODCODE_LLAMA_3_2_1B_CONFIG,
     KODCODE_CODE_LLAMA_7B_CONFIG,
-    QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG,
+    QWEN_CODER_7B_SECURE_CODE_TOPK_CONFIG,
+    QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
 )
 
 
@@ -72,7 +73,7 @@ file_ext_col = "file_extension"
 # cwe_col = "info" # placeholder since no vuln_id in this dataset
 # file_ext_col = "info" # placeholder since no vuln_id in this dataset
 
-cfg = QWEN_CODER_7B_SECURE_CODE_STRD_CONFIG
+cfg = QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
 
 output_dir = "../artifacts/activations/"
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
