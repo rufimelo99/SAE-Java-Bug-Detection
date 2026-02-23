@@ -2426,6 +2426,57 @@ class CIVulnerabilityScanner:
         print(f"Scanner loaded from {path}  ({len(scanner._probes)} CWE probes)")
         return scanner
 
+    # ------------------------------------------------------------------
+    # Integrated scan: raw code strings → report (uses ActivationExtractor)
+    # ------------------------------------------------------------------
+
+    def scan_code(
+        self,
+        baseline_code: str,
+        new_code: str,
+        extractor: "ActivationExtractor",
+    ) -> "VulnerabilityReport":
+        """
+        Scan a code change end-to-end: raw strings → SAE activations → report.
+
+        This is the primary entry point for CI/CD integration when the model
+        and SAE are loaded in the same process.
+
+        Parameters
+        ----------
+        baseline_code : str
+            The previous (secure) version of the function, e.g. from git HEAD.
+        new_code : str
+            The new version from the pull request.
+        extractor : ActivationExtractor
+            A loaded :class:`~sae_java_bug.evaluation.activation_extractor.ActivationExtractor`
+            instance.  Must be initialised with the same SAE config that was
+            used to train the scanner probes.
+
+        Returns
+        -------
+        VulnerabilityReport
+
+        Example
+        -------
+        .. code-block:: python
+
+            from sae_java_bug.evaluation.activation_extractor import ActivationExtractor
+            from sae_java_bug.sparse_autoencoders.schemas import (
+                QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG,
+            )
+
+            extractor = ActivationExtractor.from_config(
+                QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
+            ).load()
+
+            scanner = CIVulnerabilityScanner.load("scanner.pkl")
+            report  = scanner.scan_code(old_function, new_function, extractor)
+            report.print()
+        """
+        baseline_acts, new_acts = extractor.get_delta(baseline_code, new_code)
+        return self.scan(baseline_acts, new_acts)
+
 
 # ------------------------------------------------------------------
 # End-to-end demo with mock activations
