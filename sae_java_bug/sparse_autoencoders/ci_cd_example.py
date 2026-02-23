@@ -5,19 +5,21 @@ from sae_java_bug.evaluation.feature_cwe_correlation import (
     CIVulnerabilityScanner,
 )
 
-secure, vuln, cwe_labels = load_activations_from_jsonl(
-    "run_20260218_134529_vulnerable_code_qwen_coder_standard_16384_10M",
-    layer=11,
-)
-result     = compute_feature_cwe_correlations(secure, vuln, cwe_labels)
-enrichment = result.feature_enrichment(secure, vuln, cwe_labels)
+import os
+if not os.path.exists("scanner.pkl"):
+    secure, vuln, cwe_labels = load_activations_from_jsonl(
+        "run_20260218_134529_vulnerable_code_qwen_coder_standard_16384_10M",
+        layer=11,
+    )
+    result     = compute_feature_cwe_correlations(secure, vuln, cwe_labels)
+    enrichment = result.feature_enrichment(secure, vuln, cwe_labels)
 
-scanner = CIVulnerabilityScanner.train(
-    secure, vuln, cwe_labels,
-    result=result, enrichment=enrichment,
-    top_k_features=100, threshold=0.5,
-)
-scanner.save("scanner.pkl")
+    scanner = CIVulnerabilityScanner.train(
+        secure, vuln, cwe_labels,
+        result=result, enrichment=enrichment,
+        top_k_features=100, threshold=0.5,
+    )
+    scanner.save("scanner.pkl")
 
 
 # ── CI/CD: load model once per pipeline run ──────────────────────────────
@@ -32,10 +34,21 @@ scanner = CIVulnerabilityScanner.load("scanner.pkl")
 
 
 # ── Per-PR: one call per changed function ────────────────────────────────
-old_fn = """public void exec(String cmd) { Runtime.getRuntime().exec(cmd); }"""
-new_fn = """public void exec(String cmd) { Runtime.getRuntime().exec("sh -c " + cmd); }"""
+safe_fn = """
+import org.apache.commons.text.StringEscapeUtils;
 
-report = scanner.scan_code(old_fn, new_fn, extractor)
+public String renderGreeting(String name) {
+    String safeName = StringEscapeUtils.escapeHtml4(name);
+    return "<html><body>Welcome " + safeName + "</body></html>";
+}
+"""
+vuln = """
+public String renderGreeting(String name) {
+    return "<html><body>Welcome " + name + "</body></html>";
+}
+"""
+
+report = scanner.scan_code(safe_fn, vuln, extractor)
 report.print()
 
 import json, sys

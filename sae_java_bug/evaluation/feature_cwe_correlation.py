@@ -2281,12 +2281,12 @@ class CIVulnerabilityScanner:
 
     def __init__(
         self,
-        probes: dict,           # cwe → {"clf": LR, "scaler": SS, "features": ndarray}
-        threshold: float = 0.5,
+        probes: dict,           # cwe → {"clf": LR, "scaler": SS, "features": ndarray, "threshold": float}
+        threshold: Optional[float] = None,   # global fallback; None = use per-probe threshold
         n_features: int = 16384,
     ):
         self._probes = probes
-        self.threshold = threshold
+        self.threshold = threshold           # kept for backwards compat / manual override
         self.n_features = n_features
         self.cwe_names = sorted(probes.keys())
 
@@ -2305,29 +2305,45 @@ class CIVulnerabilityScanner:
         top_k_features: int = 100,
         min_samples: int = 10,
         C: float = 0.1,
-        threshold: float = 0.5,
+        min_auroc: float = 0.60,
+        target_specificity: float = 0.95,
+        n_calibration_folds: int = 3,
         random_state: int = 42,
     ) -> "CIVulnerabilityScanner":
         """
-        Train one binary probe per CWE and return a ready-to-use scanner.
+        Train one binary probe per CWE with per-CWE threshold calibration.
+
+        Two problems with a flat threshold=0.5:
+        - Probes for CWEs with low AUC (< 0.60) produce mostly noise — they
+          are disabled via *min_auroc*.
+        - Even good probes are miscalibrated: LR probability ≠ true probability,
+          especially with class imbalance.  Each probe gets its own threshold
+          calibrated to achieve *target_specificity* on held-out data.
 
         Parameters
         ----------
         secure, vulnerable : ndarray, shape (n_samples, n_features)
         cwe_labels : list[str]
-        result, enrichment : optional — used to select per-CWE selective features.
-            When provided, each probe uses only its most selective features
-            (faster inference, often better accuracy).
+        result, enrichment : optional selective-feature inputs.
         top_k_features : int
-            Features per CWE probe when using selective features.
+            Selective features per probe.
         min_samples : int
-            CWEs with fewer samples are skipped.
+            Skip CWEs with fewer samples.
         C : float
-            LR regularisation strength.
-        threshold : float
-            Risk threshold above which a CWE is flagged.
+            LR regularisation (smaller = stronger L2).
+        min_auroc : float
+            Probes whose cross-validated AUC is below this are dropped entirely.
+            Keeps only CWEs the SAE actually has signal for.
+        target_specificity : float
+            For each kept probe, find the score threshold where the false-positive
+            rate on negatives is ≤ (1 − target_specificity).  Higher = fewer
+            false positives, more false negatives.
+        n_calibration_folds : int
+            CV folds used for AUC estimation and threshold calibration.
         """
         from sklearn.linear_model import LogisticRegression
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.metrics import roc_auc_score, roc_curve
         from sklearn.preprocessing import StandardScaler
 
         delta = (vulnerable - secure).astype(np.float32)
@@ -2336,12 +2352,15 @@ class CIVulnerabilityScanner:
         eval_cwes = sorted(c for c, n in cwe_counts.items() if n >= min_samples)
 
         probes: dict = {}
+        print(f"{'CWE':<15}  {'AUC':>6}  {'Threshold':>10}  {'Status'}")
+        print("-" * 50)
+
         for cwe in eval_cwes:
             y = (labels_arr == cwe).astype(np.int32)
             if y.sum() < 2 or (1 - y).sum() < 2:
                 continue
 
-            # Select features
+            # Feature selection
             if result is not None and enrichment is not None and cwe in result.cwe_names:
                 sel = result.top_selective_features(cwe, enrichment, k=top_k_features)
                 feat_idx = np.array([f for f, _, _ in sel])
@@ -2349,17 +2368,57 @@ class CIVulnerabilityScanner:
                 feat_idx = np.arange(delta.shape[1])
 
             X = delta[:, feat_idx]
+
+            # ── Cross-validated AUC + out-of-fold scores for calibration ──
+            n_folds = min(n_calibration_folds, int(y.sum()), int((1 - y).sum()))
+            if n_folds < 2:
+                continue
+
+            skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+            oof_scores = np.zeros(len(y), dtype=np.float32)
+            fold_aucs: list[float] = []
+
+            for tr, te in skf.split(X, y):
+                sc = StandardScaler().fit(X[tr])
+                clf_cv = LogisticRegression(C=C, max_iter=500, solver="lbfgs", random_state=random_state)
+                clf_cv.fit(sc.transform(X[tr]), y[tr])
+                proba = clf_cv.predict_proba(sc.transform(X[te]))[:, 1]
+                oof_scores[te] = proba
+                if y[te].sum() > 0 and (1 - y[te]).sum() > 0:
+                    fold_aucs.append(roc_auc_score(y[te], proba))
+
+            cv_auc = float(np.mean(fold_aucs)) if fold_aucs else 0.5
+
+            # ── Drop probes below min_auroc ──────────────────────────────
+            if cv_auc < min_auroc:
+                print(f"  {cwe:<13}  {cv_auc:>6.3f}  {'—':>10}  dropped (AUC < {min_auroc})")
+                continue
+
+            # ── Calibrate threshold at target_specificity ────────────────
+            # Use OOF scores on the negative class to find the score
+            # at which (1 - specificity) fraction of negatives are above it.
+            neg_scores = oof_scores[y == 0]
+            threshold = float(np.quantile(neg_scores, target_specificity))
+            # Clip so we never flag everything or nothing
+            threshold = float(np.clip(threshold, 0.05, 0.99))
+
+            # ── Train final probe on all data ────────────────────────────
             scaler = StandardScaler().fit(X)
-            X_scaled = scaler.transform(X)
-
             clf = LogisticRegression(C=C, max_iter=500, solver="lbfgs", random_state=random_state)
-            clf.fit(X_scaled, y)
+            clf.fit(scaler.transform(X), y)
 
-            probes[cwe] = {"clf": clf, "scaler": scaler, "features": feat_idx}
-            print(f"  Trained probe for {cwe}  (n_pos={y.sum()}, n_feat={len(feat_idx)})")
+            probes[cwe] = {
+                "clf": clf,
+                "scaler": scaler,
+                "features": feat_idx,
+                "threshold": threshold,
+                "auroc": cv_auc,
+            }
+            print(f"  {cwe:<13}  {cv_auc:>6.3f}  {threshold:>10.3f}  kept")
 
-        print(f"\nScanner trained with {len(probes)} CWE probes.")
-        return cls(probes=probes, threshold=threshold, n_features=delta.shape[1])
+        print(f"\nScanner ready: {len(probes)} probes kept, "
+              f"{len(eval_cwes) - len(probes)} dropped.")
+        return cls(probes=probes, threshold=None, n_features=delta.shape[1])
 
     # ------------------------------------------------------------------
     # Inference
@@ -2395,15 +2454,25 @@ class CIVulnerabilityScanner:
             prob = float(probe["clf"].predict_proba(X_scaled)[0, 1])
             risks[cwe] = prob
 
-        flagged = sorted(c for c, s in risks.items() if s >= self.threshold)
+        # Use per-probe calibrated threshold; fall back to global if not stored
+        flagged = []
+        for cwe, prob in risks.items():
+            thr = self._probes[cwe].get("threshold", self.threshold or 0.5)
+            if self.threshold is not None:
+                thr = self.threshold   # manual global override takes precedence
+            if prob >= thr:
+                flagged.append(cwe)
+        flagged = sorted(flagged)
+
         top_cwe = max(risks, key=lambda c: risks[c]) if risks else "none"
+        display_threshold = self.threshold if self.threshold is not None else "per-CWE"
 
         return VulnerabilityReport(
             cwe_risks=risks,
             flagged=flagged,
             top_cwe=top_cwe,
             top_risk=risks.get(top_cwe, 0.0),
-            threshold=self.threshold,
+            threshold=display_threshold,
         )
 
     # ------------------------------------------------------------------
