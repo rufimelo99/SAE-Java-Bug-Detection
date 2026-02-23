@@ -2191,6 +2191,346 @@ def load_correlations(output_dir: str | Path) -> FeatureCWECorrelations:
 
 
 # ---------------------------------------------------------------------------
+# Hierarchical CWE scanner (category → specific CWE)
+# ---------------------------------------------------------------------------
+
+# CWE category hierarchy — mirrors per_cwe_analysis.CWE_CATEGORIES
+CWE_HIERARCHY: dict[str, list[str]] = {
+    "Injection":             ["CWE-78", "CWE-79", "CWE-89", "CWE-94"],
+    "Memory Safety":         ["CWE-119", "CWE-120", "CWE-125", "CWE-787",
+                              "CWE-416", "CWE-415", "CWE-401", "CWE-476"],
+    "Input Validation":      ["CWE-20", "CWE-22"],
+    "Authentication":        ["CWE-287", "CWE-352"],
+    "Resource Management":   ["CWE-400", "CWE-399", "CWE-362"],
+    "Numeric":               ["CWE-190", "CWE-369", "CWE-189"],
+    "Information Disclosure":["CWE-200"],
+    "Other":                 ["CWE-434", "CWE-264"],
+}
+
+# Reverse map: CWE → category
+_CWE_TO_CATEGORY: dict[str, str] = {
+    cwe: cat
+    for cat, cwes in CWE_HIERARCHY.items()
+    for cwe in cwes
+}
+
+
+@dataclass
+class HierarchicalScanReport:
+    """
+    Output of a hierarchical two-level scan.
+
+    Attributes
+    ----------
+    category_risks : dict[str, float]
+        Level-1 scores per category ("Injection": 0.87, …).
+    cwe_risks : dict[str, float]
+        Level-2 scores for specific CWEs within flagged categories only.
+    flagged_categories : list[str]
+        Categories whose Level-1 score exceeded their threshold.
+    flagged_cwes : list[str]
+        Specific CWEs that passed both Level-1 and Level-2 thresholds.
+    """
+    category_risks: dict[str, float]
+    cwe_risks: dict[str, float]
+    flagged_categories: list[str]
+    flagged_cwes: list[str]
+
+    def print(self) -> None:
+        print("=" * 55)
+        print("Hierarchical Vulnerability Scan")
+        print()
+        print("Level 1 — Category")
+        print(f"  {'Category':<25}  {'Risk':>6}  {'Flag'}")
+        print(f"  {'-'*25}  {'-'*6}  {'-'*4}")
+        for cat, score in sorted(self.category_risks.items(), key=lambda x: -x[1]):
+            flag = "<--" if cat in self.flagged_categories else ""
+            print(f"  {cat:<25}  {score:>6.3f}  {flag}")
+        print()
+        if self.cwe_risks:
+            print("Level 2 — Specific CWE  (within flagged categories)")
+            print(f"  {'CWE':<15}  {'Risk':>6}  {'Flag'}")
+            print(f"  {'-'*15}  {'-'*6}  {'-'*4}")
+            for cwe, score in sorted(self.cwe_risks.items(), key=lambda x: -x[1]):
+                flag = "<--" if cwe in self.flagged_cwes else ""
+                print(f"  {cwe:<15}  {score:>6.3f}  {flag}")
+        else:
+            print("Level 2 — skipped (no categories flagged)")
+        print("=" * 55)
+
+    def to_dict(self) -> dict:
+        return {
+            "flagged_categories": self.flagged_categories,
+            "flagged_cwes": self.flagged_cwes,
+            "category_risks": {k: round(v, 4) for k, v in self.category_risks.items()},
+            "cwe_risks": {k: round(v, 4) for k, v in self.cwe_risks.items()},
+        }
+
+
+class HierarchicalCWEScanner:
+    """
+    Two-level hierarchical vulnerability scanner.
+
+    Level 1 — Category probes
+    -------------------------
+    One binary probe per CWE category (Injection, Memory Safety, …).
+    Each probe is trained on **all** CWEs in the category pooled together,
+    giving 3-10× more positive samples than a single-CWE probe → higher AUC.
+
+    Level 2 — CWE-specific probes
+    ------------------------------
+    One binary probe per specific CWE, trained only on samples inside
+    its category (easier discrimination: CWE-78 vs CWE-79, not vs all 25).
+    Level-2 probes run **only** when their parent category fires.
+
+    This structure means:
+    - A false positive requires BOTH levels to misfire.
+    - Level-1 pool signal is much stronger (typical AUC 0.70–0.85).
+    - Level-2 is a simpler within-category problem.
+    """
+
+    def __init__(
+        self,
+        level1_probes: dict,   # category → {clf, scaler, features, threshold, auroc}
+        level2_probes: dict,   # cwe      → {clf, scaler, features, threshold, auroc, category}
+        hierarchy: dict[str, list[str]],
+    ):
+        self._l1 = level1_probes
+        self._l2 = level2_probes
+        self._hierarchy = hierarchy
+
+    # ------------------------------------------------------------------
+    # Training
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def train(
+        cls,
+        secure: np.ndarray,
+        vulnerable: np.ndarray,
+        cwe_labels: list[str],
+        result: Optional["FeatureCWECorrelations"] = None,
+        enrichment: Optional[np.ndarray] = None,
+        top_k_features: int = 100,
+        min_samples_l1: int = 20,
+        min_samples_l2: int = 10,
+        C: float = 0.1,
+        min_auroc_l1: float = 0.55,
+        min_auroc_l2: float = 0.55,
+        target_specificity: float = 0.95,
+        n_calibration_folds: int = 3,
+        hierarchy: Optional[dict[str, list[str]]] = None,
+        random_state: int = 42,
+    ) -> "HierarchicalCWEScanner":
+        """
+        Train both levels of the hierarchy.
+
+        Level-1 positive label = sample belongs to any CWE in the category.
+        Level-2 positive label = sample belongs to that specific CWE
+                                 (trained only on samples in the category).
+        """
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.metrics import roc_auc_score
+        from sklearn.preprocessing import StandardScaler
+
+        hier = hierarchy or CWE_HIERARCHY
+        delta = (vulnerable - secure).astype(np.float32)
+        labels_arr = np.array(cwe_labels)
+        cwe_counts = Counter(cwe_labels)
+
+        def _train_probe(X, y, feat_idx, C, n_folds, target_spec, random_state):
+            """Train one probe, return (clf, scaler, threshold, auroc)."""
+            n_folds = min(n_folds, int(y.sum()), int((1 - y).sum()))
+            if n_folds < 2:
+                return None
+            skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+            oof = np.zeros(len(y), dtype=np.float32)
+            aucs = []
+            for tr, te in skf.split(X, y):
+                sc = StandardScaler().fit(X[tr])
+                clf_cv = LogisticRegression(C=C, max_iter=500, solver="lbfgs",
+                                            random_state=random_state)
+                clf_cv.fit(sc.transform(X[tr]), y[tr])
+                p = clf_cv.predict_proba(sc.transform(X[te]))[:, 1]
+                oof[te] = p
+                if y[te].sum() > 0 and (1 - y[te]).sum() > 0:
+                    aucs.append(roc_auc_score(y[te], p))
+            cv_auc = float(np.mean(aucs)) if aucs else 0.5
+            neg_scores = oof[y == 0]
+            thr = float(np.clip(np.quantile(neg_scores, target_spec), 0.05, 0.99))
+            scaler = StandardScaler().fit(X)
+            clf = LogisticRegression(C=C, max_iter=500, solver="lbfgs",
+                                     random_state=random_state)
+            clf.fit(scaler.transform(X), y)
+            return clf, scaler, thr, cv_auc
+
+        # ── Level 1: category probes ──────────────────────────────────
+        print("Training Level 1 — category probes")
+        print(f"  {'Category':<25}  {'N+':>5}  {'AUC':>6}  {'Thr':>6}  Status")
+        print("  " + "-" * 55)
+        l1_probes: dict = {}
+
+        for category, cat_cwes in hier.items():
+            y_cat = np.isin(labels_arr, cat_cwes).astype(np.int32)
+            n_pos = int(y_cat.sum())
+            if n_pos < min_samples_l1:
+                print(f"  {category:<25}  {n_pos:>5}  {'—':>6}  {'—':>6}  skipped (n<{min_samples_l1})")
+                continue
+
+            # Features: union of selective features for all CWEs in category
+            if result is not None and enrichment is not None:
+                feat_sets = []
+                for cwe in cat_cwes:
+                    if cwe in result.cwe_names:
+                        sel = result.top_selective_features(cwe, enrichment,
+                                                            k=top_k_features // len(cat_cwes) + 5)
+                        feat_sets.extend(f for f, _, _ in sel)
+                feat_idx = np.array(sorted(set(feat_sets))) if feat_sets else np.arange(delta.shape[1])
+            else:
+                feat_idx = np.arange(delta.shape[1])
+
+            out = _train_probe(delta[:, feat_idx], y_cat, feat_idx,
+                               C, n_calibration_folds, target_specificity, random_state)
+            if out is None:
+                continue
+            clf, scaler, thr, cv_auc = out
+
+            if cv_auc < min_auroc_l1:
+                print(f"  {category:<25}  {n_pos:>5}  {cv_auc:>6.3f}  {'—':>6}  dropped")
+                continue
+
+            l1_probes[category] = dict(clf=clf, scaler=scaler, features=feat_idx,
+                                       threshold=thr, auroc=cv_auc)
+            print(f"  {category:<25}  {n_pos:>5}  {cv_auc:>6.3f}  {thr:>6.3f}  kept")
+
+        # ── Level 2: CWE-specific probes (within-category) ───────────
+        print(f"\nTraining Level 2 — CWE-specific probes (within category)")
+        print(f"  {'CWE':<12}  {'Category':<22}  {'N+':>4}  {'AUC':>6}  {'Thr':>6}  Status")
+        print("  " + "-" * 65)
+        l2_probes: dict = {}
+
+        for category, cat_cwes in hier.items():
+            if category not in l1_probes:
+                continue  # skip if L1 probe was dropped
+
+            # Only use samples that belong to this category
+            cat_mask = np.isin(labels_arr, cat_cwes)
+            delta_cat   = delta[cat_mask]
+            labels_cat  = labels_arr[cat_mask]
+
+            for cwe in cat_cwes:
+                n_pos = int((labels_cat == cwe).sum())
+                if n_pos < min_samples_l2:
+                    print(f"  {cwe:<12}  {category:<22}  {n_pos:>4}  {'—':>6}  {'—':>6}  skipped")
+                    continue
+
+                y_cwe = (labels_cat == cwe).astype(np.int32)
+
+                if result is not None and enrichment is not None and cwe in result.cwe_names:
+                    sel = result.top_selective_features(cwe, enrichment, k=top_k_features)
+                    feat_idx = np.array([f for f, _, _ in sel])
+                else:
+                    feat_idx = np.arange(delta.shape[1])
+
+                out = _train_probe(delta_cat[:, feat_idx], y_cwe, feat_idx,
+                                   C, n_calibration_folds, target_specificity, random_state)
+                if out is None:
+                    continue
+                clf, scaler, thr, cv_auc = out
+
+                if cv_auc < min_auroc_l2:
+                    print(f"  {cwe:<12}  {category:<22}  {n_pos:>4}  {cv_auc:>6.3f}  {'—':>6}  dropped")
+                    continue
+
+                l2_probes[cwe] = dict(clf=clf, scaler=scaler, features=feat_idx,
+                                      threshold=thr, auroc=cv_auc, category=category)
+                print(f"  {cwe:<12}  {category:<22}  {n_pos:>4}  {cv_auc:>6.3f}  {thr:>6.3f}  kept")
+
+        print(f"\nDone: {len(l1_probes)} category probes, {len(l2_probes)} CWE probes.")
+        return cls(l1_probes, l2_probes, hier)
+
+    # ------------------------------------------------------------------
+    # Inference
+    # ------------------------------------------------------------------
+
+    def scan(
+        self,
+        baseline_activations: np.ndarray,
+        new_code_activations: np.ndarray,
+    ) -> HierarchicalScanReport:
+        """Scan pre-computed activations through both levels."""
+        sec   = np.atleast_2d(baseline_activations).astype(np.float32)
+        new_a = np.atleast_2d(new_code_activations).astype(np.float32)
+        delta = new_a - sec
+
+        # Level 1
+        cat_risks: dict[str, float] = {}
+        for cat, probe in self._l1.items():
+            X = delta[:, probe["features"]]
+            cat_risks[cat] = float(probe["clf"].predict_proba(
+                probe["scaler"].transform(X))[0, 1])
+
+        flagged_cats = sorted(
+            c for c, s in cat_risks.items()
+            if s >= self._l1[c]["threshold"]
+        )
+
+        # Level 2 — only within flagged categories
+        cwe_risks: dict[str, float] = {}
+        for cwe, probe in self._l2.items():
+            if probe["category"] not in flagged_cats:
+                continue
+            X = delta[:, probe["features"]]
+            cwe_risks[cwe] = float(probe["clf"].predict_proba(
+                probe["scaler"].transform(X))[0, 1])
+
+        flagged_cwes = sorted(
+            c for c, s in cwe_risks.items()
+            if s >= self._l2[c]["threshold"]
+        )
+
+        return HierarchicalScanReport(
+            category_risks=cat_risks,
+            cwe_risks=cwe_risks,
+            flagged_categories=flagged_cats,
+            flagged_cwes=flagged_cwes,
+        )
+
+    def scan_code(
+        self,
+        baseline_code: str,
+        new_code: str,
+        extractor: "ActivationExtractor",
+        semgrep: Optional["SemgrepStage"] = None,
+    ) -> HierarchicalScanReport:
+        """End-to-end scan from raw code strings."""
+        if semgrep is not None:
+            semgrep_cwes = semgrep.scan_code(new_code)
+            if not semgrep_cwes:
+                return HierarchicalScanReport({}, {}, [], [])
+
+        baseline_acts, new_acts = extractor.get_delta(baseline_code, new_code)
+        return self.scan(baseline_acts, new_acts)
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def save(self, path: str | Path) -> None:
+        import pickle
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+        print(f"Saved to {path}  ({len(self._l1)} category probes, {len(self._l2)} CWE probes)")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "HierarchicalCWEScanner":
+        import pickle
+        with open(path, "rb") as f:
+            return pickle.load(f)
+
+
+# ---------------------------------------------------------------------------
 # CI/CD vulnerability scanner
 # ---------------------------------------------------------------------------
 
@@ -2504,47 +2844,93 @@ class CIVulnerabilityScanner:
         baseline_code: str,
         new_code: str,
         extractor: "ActivationExtractor",
+        semgrep: Optional["SemgrepStage"] = None,
     ) -> "VulnerabilityReport":
         """
-        Scan a code change end-to-end: raw strings → SAE activations → report.
+        Scan a code change end-to-end: raw strings → Semgrep → SAE → report.
 
-        This is the primary entry point for CI/CD integration when the model
-        and SAE are loaded in the same process.
+        Two-gate pipeline (when *semgrep* is provided)
+        -----------------------------------------------
+        Gate 1 — **Semgrep** (fast, rule-based, ~ms):
+            Scans *new_code* with pattern rules and returns the CWEs it flags.
+            If Semgrep finds nothing, the scan stops here and returns clean.
+            No SAE inference is run — saves ~200 ms per function.
+
+        Gate 2 — **SAE probe** (semantic, ML-based, ~200 ms):
+            Only runs for CWEs that Semgrep already flagged.
+            A CWE is reported only if the SAE probe score exceeds the
+            calibrated per-CWE threshold.
+
+        A finding requires **both gates to agree**, which dramatically reduces
+        false positives compared to either tool alone.
+
+        Without *semgrep*
+        -----------------
+        All SAE probes run independently (original behaviour).
 
         Parameters
         ----------
         baseline_code : str
-            The previous (secure) version of the function, e.g. from git HEAD.
+            Previous (secure) version, e.g. from git HEAD~1.
         new_code : str
-            The new version from the pull request.
+            Incoming version from the pull request.
         extractor : ActivationExtractor
-            A loaded :class:`~sae_java_bug.evaluation.activation_extractor.ActivationExtractor`
-            instance.  Must be initialised with the same SAE config that was
-            used to train the scanner probes.
+            Loaded extractor for the same SAE config used at training time.
+        semgrep : SemgrepStage, optional
+            Configured Semgrep stage.  When None, Semgrep gate is skipped.
 
         Returns
         -------
         VulnerabilityReport
-
-        Example
-        -------
-        .. code-block:: python
-
-            from sae_java_bug.evaluation.activation_extractor import ActivationExtractor
-            from sae_java_bug.sparse_autoencoders.schemas import (
-                QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG,
-            )
-
-            extractor = ActivationExtractor.from_config(
-                QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
-            ).load()
-
-            scanner = CIVulnerabilityScanner.load("scanner.pkl")
-            report  = scanner.scan_code(old_function, new_function, extractor)
-            report.print()
         """
+        # ── Gate 1: Semgrep (optional) ────────────────────────────────
+        semgrep_cwes: Optional[set] = None
+        if semgrep is not None:
+            semgrep_cwes = semgrep.scan_code(new_code)
+            if not semgrep_cwes:
+                # Nothing flagged by Semgrep — skip SAE entirely
+                return VulnerabilityReport(
+                    cwe_risks={},
+                    flagged=[],
+                    top_cwe="none",
+                    top_risk=0.0,
+                    threshold="semgrep+sae",
+                )
+
+        # ── Gate 2: SAE delta probe ───────────────────────────────────
         baseline_acts, new_acts = extractor.get_delta(baseline_code, new_code)
-        return self.scan(baseline_acts, new_acts)
+        sec   = np.atleast_2d(baseline_acts).astype(np.float32)
+        new_a = np.atleast_2d(new_acts).astype(np.float32)
+        delta = new_a - sec
+
+        risks: dict[str, float] = {}
+        for cwe, probe in self._probes.items():
+            # Only probe CWEs that Semgrep flagged (if Semgrep ran)
+            if semgrep_cwes is not None and cwe not in semgrep_cwes:
+                continue
+            X        = delta[:, probe["features"]]
+            X_scaled = probe["scaler"].transform(X)
+            risks[cwe] = float(probe["clf"].predict_proba(X_scaled)[0, 1])
+
+        # ── Threshold decision ────────────────────────────────────────
+        flagged = []
+        for cwe, prob in risks.items():
+            thr = self._probes[cwe].get("threshold", self.threshold or 0.5)
+            if self.threshold is not None:
+                thr = self.threshold   # manual global override
+            if prob >= thr:
+                flagged.append(cwe)
+        flagged = sorted(flagged)
+
+        top_cwe = max(risks, key=lambda c: risks[c]) if risks else "none"
+        mode    = "semgrep+sae" if semgrep is not None else "sae-only"
+        return VulnerabilityReport(
+            cwe_risks=risks,
+            flagged=flagged,
+            top_cwe=top_cwe,
+            top_risk=risks.get(top_cwe, 0.0),
+            threshold=mode,
+        )
 
 
 # ------------------------------------------------------------------
@@ -2633,6 +3019,212 @@ def demo_cicd_scanner(n_features: int = 256, n_samples: int = 200) -> None:
 
         report = scanner_loaded.scan(baseline, new_code)
         report.print()
+
+
+# ---------------------------------------------------------------------------
+# Summary story visualisation
+# ---------------------------------------------------------------------------
+
+def plot_summary_story(
+    secure: np.ndarray,
+    vulnerable: np.ndarray,
+    cwe_labels: list[str],
+    result: "FeatureCWECorrelations",
+    enrichment: np.ndarray,
+    binary_probe: Optional["BinaryProbeResult"] = None,
+    min_samples: int = 10,
+    save_path: Optional[str] = None,
+    figsize: tuple[int, int] = (18, 14),
+) -> None:
+    """
+    Four-panel summary figure that tells the complete story of what the SAE
+    encodes about vulnerabilities.
+
+    Panel A — Activation density
+        Secure and vulnerable code activate the same number of SAE features.
+        The vulnerability signal lives in *which* features fire, not *how many*.
+
+    Panel B — CWE visibility spectrum
+        AUC-ROC of binary detection probes per CWE (if binary_probe supplied)
+        or max absolute enrichment otherwise.  Shows which vulnerability types
+        leave a clear fingerprint in SAE feature space.
+
+    Panel C — CWE semantic similarity
+        Cosine similarity between CWE feature-correlation profiles.
+        Injection bugs cluster together; memory safety bugs cluster together;
+        the two groups are anti-correlated.
+
+    Panel D — Top selective features for most-detectable CWEs
+        Heatmap of log2 fold-change enrichment for the top selective features
+        of the three most detectable CWEs.  Shows that specific SAE features
+        act as near-exclusive detectors for individual vulnerability types.
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    from matplotlib import rcParams
+    from scipy.stats import wilcoxon
+
+    rcParams.update({"font.family": "serif", "font.size": 10})
+
+    fig = plt.figure(figsize=figsize, dpi=150)
+    gs  = gridspec.GridSpec(
+        2, 2,
+        hspace=0.45, wspace=0.35,
+        left=0.07, right=0.97, top=0.93, bottom=0.07,
+    )
+    ax_density  = fig.add_subplot(gs[0, 0])
+    ax_auc      = fig.add_subplot(gs[0, 1])
+    ax_sim      = fig.add_subplot(gs[1, 0])
+    ax_features = fig.add_subplot(gs[1, 1])
+
+    # ── Panel A: Activation density ───────────────────────────────────
+    sec_density  = (secure > 0).mean(axis=1)
+    vuln_density = (vulnerable > 0).mean(axis=1)
+    try:
+        _, pval = wilcoxon(vuln_density - sec_density)
+    except ValueError:
+        pval = 1.0
+
+    bins = np.linspace(
+        min(sec_density.min(), vuln_density.min()),
+        max(sec_density.max(), vuln_density.max()),
+        40,
+    )
+    ax_density.hist(sec_density,  bins=bins, alpha=0.6, color="#3498db",
+                    label=f"Secure  (μ={sec_density.mean():.3f})",  density=True)
+    ax_density.hist(vuln_density, bins=bins, alpha=0.6, color="#e74c3c",
+                    label=f"Vulnerable  (μ={vuln_density.mean():.3f})", density=True)
+    ax_density.axvline(sec_density.mean(),  color="#2980b9", linestyle="--", lw=1.5)
+    ax_density.axvline(vuln_density.mean(), color="#c0392b", linestyle="--", lw=1.5)
+    sig = "***" if pval < 0.001 else ("n.s." if pval > 0.05 else "*")
+    ax_density.set_xlabel("Fraction of active SAE features (> 0)")
+    ax_density.set_ylabel("Density")
+    ax_density.set_title(
+        f"A  —  Activation density\n"
+        f"Wilcoxon p={pval:.1e}  {sig}",
+        loc="left", fontweight="bold",
+    )
+    ax_density.legend(fontsize=8)
+
+    # ── Panel B: CWE visibility (AUC or enrichment) ──────────────────
+    cwes_b = [c for c in result.cwe_names if result.cwe_counts[c] >= min_samples]
+
+    if binary_probe is not None:
+        # Use AUC from binary probes
+        cwe_scores = {c: binary_probe.auroc.get(c, 0.5) for c in cwes_b}
+        ylabel_b   = "AUC-ROC (binary detection probe)"
+        ref_val    = 0.5
+        ref_label  = "Random (0.5)"
+    else:
+        # Fall back to max enrichment as a proxy
+        enr_sub = enrichment[[result.cwe_names.index(c) for c in cwes_b]]
+        cwe_scores = {c: float(np.abs(enr_sub[i]).max())
+                      for i, c in enumerate(cwes_b)}
+        ylabel_b  = "Max |log2 fold-change| enrichment"
+        ref_val   = 0.0
+        ref_label = None
+
+    sorted_b = sorted(cwe_scores.items(), key=lambda x: x[1])
+    bars_b = ax_auc.barh(
+        [c for c, _ in sorted_b],
+        [s for _, s in sorted_b],
+        color=["#2ecc71" if s >= 0.65 else
+               "#f39c12" if s >= 0.58 else
+               "#95a5a6"
+               for _, s in sorted_b],
+        edgecolor="white", linewidth=0.4,
+    )
+    ax_auc.axvline(ref_val, color="red", linestyle="--", lw=1,
+                   label=ref_label or "")
+    ax_auc.set_xlabel(ylabel_b)
+    ax_auc.set_title(
+        "B  —  CWE visibility spectrum\n"
+        "Which vulnerability types leave SAE fingerprints?",
+        loc="left", fontweight="bold",
+    )
+    if ref_label:
+        ax_auc.legend(fontsize=8)
+
+    # ── Panel C: CWE semantic similarity ─────────────────────────────
+    keep_c = [c for c in result.cwe_names if result.cwe_counts[c] >= min_samples]
+    idx_c  = [result.cwe_names.index(c) for c in keep_c]
+    sim    = result.cwe_similarity_matrix()[np.ix_(idx_c, idx_c)]
+
+    try:
+        from scipy.cluster.hierarchy import linkage, leaves_list
+        from scipy.spatial.distance import squareform
+        dist = np.clip(1 - sim, 0, 2)
+        np.fill_diagonal(dist, 0)
+        Z    = linkage(squareform(dist), method="average")
+        order = leaves_list(Z)
+    except Exception:
+        order = list(range(len(keep_c)))
+
+    sim_ord    = sim[np.ix_(order, order)]
+    labels_ord = [keep_c[i] for i in order]
+
+    im_c = ax_sim.imshow(sim_ord, cmap="RdBu_r", vmin=-1, vmax=1, aspect="auto")
+    ax_sim.set_xticks(range(len(labels_ord)))
+    ax_sim.set_yticks(range(len(labels_ord)))
+    ax_sim.set_xticklabels(labels_ord, rotation=45, ha="right", fontsize=7)
+    ax_sim.set_yticklabels(labels_ord, fontsize=7)
+    plt.colorbar(im_c, ax=ax_sim, shrink=0.75, label="Cosine similarity")
+    ax_sim.set_title(
+        "C  —  CWE semantic clusters\n"
+        "Shared SAE feature fingerprints",
+        loc="left", fontweight="bold",
+    )
+
+    # ── Panel D: Selective features for top-3 detectable CWEs ────────
+    if binary_probe is not None:
+        top3_cwes = sorted(
+            [c for c in binary_probe.cwe_names if c in result.cwe_names],
+            key=lambda c: -binary_probe.auroc.get(c, 0),
+        )[:3]
+    else:
+        top3_cwes = sorted(
+            [c for c in result.cwe_names if result.cwe_counts[c] >= min_samples],
+            key=lambda c: -float(np.abs(
+                enrichment[result.cwe_names.index(c)]
+            ).max()),
+        )[:3]
+
+    # Collect top-10 selective features per CWE, take the union
+    sel = result.feature_selectivity(enrichment)
+    feat_union: list[int] = []
+    for cwe in top3_cwes:
+        idx_cwe = result.cwe_names.index(cwe)
+        top10 = np.argsort(-sel[idx_cwe])[:10]
+        feat_union.extend(top10.tolist())
+    feat_union = list(dict.fromkeys(feat_union))[:30]  # deduplicate, cap at 30
+
+    cwe_idx_d = [result.cwe_names.index(c) for c in top3_cwes]
+    heat_d    = enrichment[np.ix_(cwe_idx_d, feat_union)]
+
+    vmax_d = max(np.abs(heat_d).max(), 1.0)
+    im_d   = ax_features.imshow(heat_d, aspect="auto", cmap="RdBu_r",
+                                  vmin=-vmax_d, vmax=vmax_d)
+    ax_features.set_yticks(range(len(top3_cwes)))
+    ax_features.set_yticklabels(top3_cwes, fontsize=9)
+    ax_features.set_xticks(range(len(feat_union)))
+    ax_features.set_xticklabels(feat_union, rotation=90, fontsize=6)
+    ax_features.set_xlabel("SAE feature index  (selected by per-CWE selectivity)")
+    plt.colorbar(im_d, ax=ax_features, shrink=0.75, label="log2 fold-change")
+    ax_features.set_title(
+        "D  —  Exclusive feature detectors\n"
+        f"Top selective features for {', '.join(top3_cwes)}",
+        loc="left", fontweight="bold",
+    )
+
+    fig.suptitle(
+        "What does a Sparse Autoencoder encode about software vulnerabilities?",
+        fontsize=13, fontweight="bold", y=0.98,
+    )
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight")
+        print(f"Saved to {save_path}")
+    plt.show()
 
 
 # ---------------------------------------------------------------------------
