@@ -1,3 +1,4 @@
+import argparse
 import base64
 import json
 import os
@@ -25,8 +26,18 @@ from sae_java_bug.sparse_autoencoders.schemas import (
     KODCODE_LLAMA_3_2_1B_CONFIG,
     KODCODE_CODE_LLAMA_7B_CONFIG,
     QWEN_CODER_7B_SECURE_CODE_TOPK_CONFIG,
-    QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
+    QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG,
+    QWEN_CODER_7B_VULNEABLE_CODE_STD_CONFIG,
 )
+
+CONFIG_REGISTRY = {
+    "GEMMA3": GEMMA3_CONFIG,
+    "KODCODE_LLAMA_3_2_1B": KODCODE_LLAMA_3_2_1B_CONFIG,
+    "KODCODE_CODE_LLAMA_7B": KODCODE_CODE_LLAMA_7B_CONFIG,
+    "QWEN_CODER_7B_SECURE_CODE_TOPK": QWEN_CODER_7B_SECURE_CODE_TOPK_CONFIG,
+    "QWEN_CODER_7B_VULNEABLE_CODE_STD_10M": QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG,
+    "QWEN_CODER_7B_VULNEABLE_CODE_STD": QWEN_CODER_7B_VULNEABLE_CODE_STD_CONFIG,
+}
 
 
 class ActivationsSchema(BaseModel):
@@ -59,33 +70,6 @@ device = (
     else "cuda" if torch.cuda.is_available() else "cpu"
 )
 logger.info("Getting device.", device=device)
-
-hf_path = "rufimelo/DeltaSecommits"
-before_func_col = "prior_version"
-after_func_col = "after_version"
-vuln_id_col = "vuln_id"
-cwe_col = "cwe"
-file_ext_col = "file_extension"
-# hf_path = "rufimelo/ETHPy150Open_swapped_operand"
-# before_func_col = "buggy_version"
-# after_func_col = "correct_version"
-# vuln_id_col = "info" # placeholder since no vuln_id in this dataset
-# cwe_col = "info" # placeholder since no vuln_id in this dataset
-# file_ext_col = "info" # placeholder since no vuln_id in this dataset
-
-cfg = QWEN_CODER_7B_VULNEABLE_CODE_STD_10M_CONFIG
-
-output_dir = "../artifacts/activations/"
-current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = os.path.join(output_dir, f"run_{current_time}_{cfg.release.value}/")
-logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
-
-MSR_df = load_dataset(hf_path, split="train").to_pandas()
-
-MODEL_ARG = cfg.model.value
-RELEASE = cfg.release.value
-CACHE_COMPONENT = cfg.cached_component.value
-
 
 def log_warning(message: str, filepath: str):
     path = Path(filepath)
@@ -132,6 +116,68 @@ def get_residuals(code_str: str, layer_idx: int, tokenizer, model, device=None):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run SAE activation extraction.")
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        choices=list(CONFIG_REGISTRY.keys()),
+        help=f"SAE config to use. Available: {list(CONFIG_REGISTRY.keys())}",
+    )
+    parser.add_argument(
+        "--hf_path",
+        type=str,
+        default="rufimelo/DeltaSecommits",
+        help="HuggingFace dataset path.",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="../artifacts/activations/",
+        help="Base output directory for activations.",
+    )
+    parser.add_argument(
+        "--max_tokens",
+        type=int,
+        default=2000,
+        help="Skip samples exceeding this token count.",
+    )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=None,
+        help="Limit number of samples processed (default: all).",
+    )
+    parser.add_argument(
+        "--skip_layers",
+        type=int,
+        nargs="+",
+        default=[],
+        metavar="LAYER",
+        help="Layer indices to skip (e.g. --skip_layers 0 3 7).",
+    )
+    args = parser.parse_args()
+
+    cfg = CONFIG_REGISTRY[args.config]
+
+    # Dataset column names (DeltaSecommits defaults)
+    before_func_col = "prior_version"
+    after_func_col = "after_version"
+    vuln_id_col = "vuln_id"
+    cwe_col = "cwe"
+    file_ext_col = "file_extension"
+
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = os.path.join(args.output_dir, f"run_{current_time}_{cfg.release.value}/")
+    logger_filepath = f"../artifacts/logs/sae_exploration_{current_time}.log"
+
+    MODEL_ARG = cfg.model.value
+    RELEASE = cfg.release.value
+    CACHE_COMPONENT = cfg.cached_component.value
+
+    MSR_df = load_dataset(args.hf_path, split="train").to_pandas()
+    n_samples = args.max_samples if args.max_samples is not None else len(MSR_df)
+
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ARG)
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ARG, torch_dtype=torch.float16
@@ -140,16 +186,17 @@ if __name__ == "__main__":
 
     skipped_vuln_ids = set()
 
-    for layer in tqdm(cfg.layers_available):
+    layers_to_run = [l for l in cfg.layers_available if l not in args.skip_layers]
+
+    for layer in tqdm(layers_to_run):
         SAE_ID = cfg.sae_id(layer_index=layer)
         if cfg.is_local:
-            sae,  cfg_dict, sparsity  = SAE.load_from_disk(cfg.sae_path(layer_index=layer), device=device)
+            sae, cfg_dict, sparsity = SAE.load_from_disk(cfg.sae_path(layer_index=layer), device=device)
         else:
             sae, cfg_dict, sparsity = SAE.from_pretrained(
                 release=RELEASE, sae_id=SAE_ID, device=device
             )
-        for i in trange(len(MSR_df)):
-        #for i in trange(200):  # Limit to 200 samples for faster testing
+        for i in trange(n_samples):
             secure_code = str(MSR_df.iloc[i][before_func_col])
             vulnerable_code = str(MSR_df.iloc[i][after_func_col])
             cwe = str(MSR_df.iloc[i][cwe_col])
@@ -163,7 +210,7 @@ if __name__ == "__main__":
                 len(tokenizer(secure_code, return_tensors="pt")["input_ids"][0]),
                 len(tokenizer(vulnerable_code, return_tensors="pt")["input_ids"][0]),
             )
-            if max_tokens > 2000:
+            if max_tokens > args.max_tokens:
                 warn_msg = f"Skipping vuln_id {vuln_id} due to max tokens {max_tokens} exceeding limit."
                 logger.warning(warn_msg)
                 log_warning(warn_msg, logger_filepath)
@@ -215,9 +262,9 @@ if __name__ == "__main__":
             logger.info(
                 f"Saved activations for vuln_id {vuln_id} at layer {layer} with SAE {SAE_ID} to disk at `{output_dir}`."
             )
-            
 
             torch.cuda.empty_cache()
+
     # Store a new file with the config used
     with open(f"{output_dir}sae_config_used.json", "w") as f:
         f.write(json.dumps(cfg.model_dump(), indent=4))
