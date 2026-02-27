@@ -12,6 +12,7 @@ set -euo pipefail
 CONFIG="${1:-QWEN_CODER_7B_VULNEABLE_CODE_STD}"
 HF_PATH="${2:-rufimelo/DeltaSecommits}"
 OUTPUT_DIR="${3:-../artifacts/activations/}"
+MAX_TOKENS="${4:-2000}"
 MAX_SAMPLES="${5:-}"  # leave empty to use all samples
 SKIP_LAYERS="${6:-}"  # space-separated layer indices to skip, e.g. "0 3 7"
 
@@ -26,6 +27,10 @@ ARGS=(
     --output_dir "$OUTPUT_DIR"
     --max_tokens "$MAX_TOKENS"
 )
+
+if [[ -n "$MAX_SAMPLES" ]]; then
+    ARGS+=(--max_samples "$MAX_SAMPLES")
+fi
 
 if [[ -n "$SKIP_LAYERS" ]]; then
     # shellcheck disable=SC2086
