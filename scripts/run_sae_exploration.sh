@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 
 # Available configs and their layers:
 #   GEMMA3                              layers [0..24]
@@ -49,7 +49,23 @@ fi
 
 echo "Running SAE exploration | config: $CONFIG | layers: $LAYERS"
 
+failed_layers=()
+
 for layer in $LAYERS; do
     echo "--- Layer $layer ---"
-    python -m sae_java_bug.sparse_autoencoders.sae_exploration "${BASE_ARGS[@]}" --layer "$layer"
+    if python -m sae_java_bug.sparse_autoencoders.sae_exploration "${BASE_ARGS[@]}" --layer "$layer"; then
+        echo "--- Layer $layer: OK ---"
+    else
+        echo "--- Layer $layer: FAILED (exit code $?) ---" >&2
+        failed_layers+=("$layer")
+    fi
 done
+
+if [[ ${#failed_layers[@]} -gt 0 ]]; then
+    echo ""
+    echo "FAILED layers: ${failed_layers[*]}" >&2
+    exit 1
+else
+    echo ""
+    echo "All layers completed successfully."
+fi
