@@ -13,7 +13,7 @@ from datasets import load_dataset
 from jaxtyping import Float
 from pydantic import BaseModel
 from sae_lens import SAE
-from tqdm import tqdm, trange
+from tqdm import trange
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from sae_java_bug.logger import logger
@@ -149,16 +149,21 @@ if __name__ == "__main__":
         help="Limit number of samples processed (default: all).",
     )
     parser.add_argument(
-        "--skip_layers",
+        "--layer",
         type=int,
-        nargs="+",
-        default=[],
-        metavar="LAYER",
-        help="Layer indices to skip (e.g. --skip_layers 0 3 7).",
+        required=True,
+        help="Layer index to process.",
     )
     args = parser.parse_args()
 
     cfg = CONFIG_REGISTRY[args.config]
+
+    if args.layer not in cfg.layers_available:
+        parser.error(
+            f"Layer {args.layer} not in layers_available for config '{args.config}': {cfg.layers_available}"
+        )
+
+    layer = args.layer
 
     # Dataset column names (DeltaSecommits defaults)
     before_func_col = "prior_version"
@@ -184,86 +189,84 @@ if __name__ == "__main__":
     ).to(device)
     model.eval()
 
+    SAE_ID = cfg.sae_id(layer_index=layer)
+    if cfg.is_local:
+        sae, cfg_dict, sparsity = SAE.load_from_disk(cfg.sae_path(layer_index=layer), device=device)
+    else:
+        sae, cfg_dict, sparsity = SAE.from_pretrained(
+            release=RELEASE, sae_id=SAE_ID, device=device
+        )
+
     skipped_vuln_ids = set()
 
-    layers_to_run = [l for l in cfg.layers_available if l not in args.skip_layers]
+    for i in trange(n_samples):
+        secure_code = str(MSR_df.iloc[i][before_func_col])
+        vulnerable_code = str(MSR_df.iloc[i][after_func_col])
+        cwe = str(MSR_df.iloc[i][cwe_col])
+        file_extension = str(MSR_df.iloc[i][file_ext_col])
+        vuln_id = str(MSR_df.iloc[i][vuln_id_col])
 
-    for layer in tqdm(layers_to_run):
-        SAE_ID = cfg.sae_id(layer_index=layer)
-        if cfg.is_local:
-            sae, cfg_dict, sparsity = SAE.load_from_disk(cfg.sae_path(layer_index=layer), device=device)
-        else:
-            sae, cfg_dict, sparsity = SAE.from_pretrained(
-                release=RELEASE, sae_id=SAE_ID, device=device
-            )
-        for i in trange(n_samples):
-            secure_code = str(MSR_df.iloc[i][before_func_col])
-            vulnerable_code = str(MSR_df.iloc[i][after_func_col])
-            cwe = str(MSR_df.iloc[i][cwe_col])
-            file_extension = str(MSR_df.iloc[i][file_ext_col])
-            vuln_id = str(MSR_df.iloc[i][vuln_id_col])
+        if vuln_id in skipped_vuln_ids:
+            continue
 
-            if vuln_id in skipped_vuln_ids:
-                continue
+        max_tokens = max(
+            len(tokenizer(secure_code, return_tensors="pt")["input_ids"][0]),
+            len(tokenizer(vulnerable_code, return_tensors="pt")["input_ids"][0]),
+        )
+        if max_tokens > args.max_tokens:
+            warn_msg = f"Skipping vuln_id {vuln_id} due to max tokens {max_tokens} exceeding limit."
+            logger.warning(warn_msg)
+            log_warning(warn_msg, logger_filepath)
+            skipped_vuln_ids.add(vuln_id)
+            continue
 
-            max_tokens = max(
-                len(tokenizer(secure_code, return_tensors="pt")["input_ids"][0]),
-                len(tokenizer(vulnerable_code, return_tensors="pt")["input_ids"][0]),
-            )
-            if max_tokens > args.max_tokens:
-                warn_msg = f"Skipping vuln_id {vuln_id} due to max tokens {max_tokens} exceeding limit."
-                logger.warning(warn_msg)
-                log_warning(warn_msg, logger_filepath)
-                skipped_vuln_ids.add(vuln_id)
-                continue
+        # Extract residuals manually.
+        layer_after_embeddings = layer + 1
 
-            # Extract residuals manually.
-            layer_after_embeddings = layer + 1
+        resid_secure = get_residuals(
+            secure_code, layer_after_embeddings, tokenizer, model
+        )
+        resid_vuln = get_residuals(
+            vulnerable_code, layer_after_embeddings, tokenizer, model
+        )
 
-            resid_secure = get_residuals(
-                secure_code, layer_after_embeddings, tokenizer, model
-            )
-            resid_vuln = get_residuals(
-                vulnerable_code, layer_after_embeddings, tokenizer, model
-            )
+        secure_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(
+            resid_secure
+        ).cpu()
+        secure_features = einops.rearrange(secure_features, "1 d_sae -> d_sae")
+        vuln_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(resid_vuln).cpu()
+        vuln_features = einops.rearrange(vuln_features, "1 d_sae -> d_sae")
 
-            secure_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(
-                resid_secure
-            ).cpu()
-            secure_features = einops.rearrange(secure_features, "1 d_sae -> d_sae")
-            vuln_features: Float[torch.Tensor, "1 d_sae"] = sae.encode(resid_vuln).cpu()
-            vuln_features = einops.rearrange(vuln_features, "1 d_sae -> d_sae")
+        index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
 
-            index = [f"feature_{i}" for i in range(sae.cfg.d_sae)]
+        feature_activation_df = pd.DataFrame(
+            vuln_features, index=index, columns=["vulnerable"]
+        )
+        feature_activation_df["secure"] = secure_features
 
-            feature_activation_df = pd.DataFrame(
-                vuln_features, index=index, columns=["vulnerable"]
-            )
-            feature_activation_df["secure"] = secure_features
+        base64_secure = base64.b64encode(secure_code.encode("utf-8"))
+        base64_vuln = base64.b64encode(vulnerable_code.encode("utf-8"))
 
-            base64_secure = base64.b64encode(secure_code.encode("utf-8"))
-            base64_vuln = base64.b64encode(vulnerable_code.encode("utf-8"))
+        activations = ActivationsSchema(
+            vuln_id=vuln_id,
+            secure_code=base64_secure,
+            vulnerable_code=base64_vuln,
+            secure=secure_features.tolist(),
+            vulnerable=vuln_features.tolist(),
+            layer=layer,
+            sae_config=cfg,
+            cwe=cwe,
+            file_extension=file_extension,
+        )
 
-            activations = ActivationsSchema(
-                vuln_id=vuln_id,
-                secure_code=base64_secure,
-                vulnerable_code=base64_vuln,
-                secure=secure_features.tolist(),
-                vulnerable=vuln_features.tolist(),
-                layer=layer,
-                sae_config=cfg,
-                cwe=cwe,
-                file_extension=file_extension,
-            )
+        activations.append_to_jsonl(
+            f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
+        )
+        logger.info(
+            f"Saved activations for vuln_id {vuln_id} at layer {layer} with SAE {SAE_ID} to disk at `{output_dir}`."
+        )
 
-            activations.append_to_jsonl(
-                f"{output_dir}activations_layer_{layer}_sae_{normalise(SAE_ID)}_component_{normalise(CACHE_COMPONENT)}.jsonl"
-            )
-            logger.info(
-                f"Saved activations for vuln_id {vuln_id} at layer {layer} with SAE {SAE_ID} to disk at `{output_dir}`."
-            )
-
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
 
     # Store a new file with the config used
     with open(f"{output_dir}sae_config_used.json", "w") as f:
