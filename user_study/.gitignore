@@ -1,0 +1,6 @@
+# Generated at runtime — do not commit
+data/feedback.jsonl
+
+# Large raw data — not needed for the study UI
+data/study_data.jsonl
+data/hypotheses.json
