@@ -3,6 +3,7 @@ SAE Bug Detection – User Study
 Run with:  streamlit run app.py
 """
 
+import html as html_lib
 import json
 from pathlib import Path
 
@@ -16,7 +17,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-DATA_PATH = Path(__file__).parent / "data" / "study_data.jsonl"
+_CURATED = Path(__file__).parent / "data" / "curated_study_data.jsonl"
+_FULL    = Path(__file__).parent / "data" / "study_data.jsonl"
+DATA_PATH = _CURATED if _CURATED.exists() else _FULL
 
 EXT_TO_LANG = {
     "java": "java",
@@ -56,6 +59,30 @@ def load_data() -> list[dict]:
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def lang(ext: str) -> str:
     return EXT_TO_LANG.get(ext.lower().lstrip("."), "text")
+
+
+def render_code_box(code: str, height: int = 600) -> None:
+    """Render a scrollable code block using a styled HTML div."""
+    escaped = html_lib.escape(code)
+    st.markdown(
+        f"""<div style="
+            height:{height}px;
+            overflow-y:auto;
+            overflow-x:auto;
+            background:#0e1117;
+            padding:14px 16px;
+            border-radius:6px;
+            border:1px solid #2d2d2d;
+            font-family:'Source Code Pro','Courier New',monospace;
+            font-size:13px;
+            line-height:1.6;
+            color:#e8e8e8;
+            white-space:pre-wrap;
+            word-break:break-word;
+            tab-size:4;
+        ">{escaped}</div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def activation_chart(features: list[dict]) -> go.Figure:
@@ -199,12 +226,16 @@ features = sample["top_features"][:top_k]
 # ─── Main content ──────────────────────────────────────────────────────────────
 header_col, meta_col = st.columns([3, 1])
 with header_col:
-    st.subheader(f"{sample['vuln_id']}")
+    title = sample.get("title") or sample["vuln_id"]
+    st.subheader(title)
+    st.caption(sample["vuln_id"])
 with meta_col:
     st.markdown(
         f"**CWE:** `{sample['cwe']}`  \n"
         f"**Language:** `{sample['file_extension'] or 'unknown'}`"
     )
+    if sample.get("placeholder_activations"):
+        st.warning("Placeholder activations", icon="⚠️")
 
 st.divider()
 
@@ -214,11 +245,11 @@ language = lang(sample["file_extension"])
 
 with code_left:
     st.markdown("### ✅ Secure version")
-    st.code(sample["secure_code"], language=language, line_numbers=True)
+    render_code_box(sample["secure_code"])
 
 with code_right:
     st.markdown("### ⚠️ Vulnerable version")
-    st.code(sample["vulnerable_code"], language=language, line_numbers=True)
+    render_code_box(sample["vulnerable_code"])
 
 st.divider()
 
