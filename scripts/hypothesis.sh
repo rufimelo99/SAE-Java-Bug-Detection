@@ -21,5 +21,5 @@ my_map["run_20260227_212854_rufimelo/vulnerable_code_qwen_coder_standard_16384"]
 for key in "${!my_map[@]}"; do
     value="${my_map[$key]}"
     echo "Key: $key, Value: $value"
-    python -m sae_java_bug.sparse_autoencoders.feature_hypothesis --run_id "$key" --layer "$value" --output "hypotheses_${key}.jsonl" --region us-east-2
+    python -m sae_java_bug.sparse_autoencoders.feature_hypothesis --run_id "$key" --layer "$value" --output "hypotheses_layer_${value}.jsonl" --region us-east-2
 done
