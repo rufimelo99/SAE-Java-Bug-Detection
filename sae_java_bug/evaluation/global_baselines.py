@@ -390,7 +390,7 @@ class GlobalAnomalyBaselines:
         self.run_ocsvm()
         self.run_pca_reconstruction()
         self.run_cosine_distance_to_centroid()
-        self.run_mahalanobis_distance()
+        # self.run_mahalanobis_distance()
         return self.results
 
     def print_summary(self) -> str:
