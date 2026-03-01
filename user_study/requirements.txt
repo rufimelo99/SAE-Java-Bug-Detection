@@ -1,3 +1,0 @@
-streamlit>=1.32.0
-plotly>=5.20.0
-huggingface_hub>=0.23.0
