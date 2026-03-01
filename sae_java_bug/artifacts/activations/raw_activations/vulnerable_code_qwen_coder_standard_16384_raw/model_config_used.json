@@ -1,0 +1,16 @@
+{
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "release": "rufimelo/vulnerable_code_qwen_coder_standard_16384",
+    "cached_component": "hook_resid_post.hook_sae_acts_post",
+    "layers_available": [
+        0,
+        3,
+        7,
+        11,
+        15,
+        19,
+        23,
+        27
+    ],
+    "local_path_template": null
+}
