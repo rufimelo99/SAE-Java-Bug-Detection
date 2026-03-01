@@ -47,7 +47,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 HERE = Path(__file__).parent
 ARTIFACTS = HERE.parents[1] / "artifacts" / "activations"
-SAE_RUN = ARTIFACTS / "run_20260218_134529_vulnerable_code_qwen_coder_standard_16384_10M"
+SAE_RUN = ARTIFACTS / "run_20260227_212508_rufimelo" / "vulnerable_code_qwen_coder_standard_16384"
 PAPER_FIGS = (
     HERE.parents[3]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
@@ -57,7 +57,7 @@ PAPER_FIGS = (
 # ── SAE model identifiers ─────────────────────────────────────────────────────
 
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
-SAE_REPO  = "rufimelo/vulnerable_code_qwen_coder_standard_16384_10M"
+SAE_REPO  = "rufimelo/vulnerable_code_qwen_coder_standard_16384"
 SAE_LAYER = 11
 
 # ── Style (NeurIPS-compatible) ────────────────────────────────────────────────
@@ -152,7 +152,9 @@ def load_sae_weights(repo_id: str, device: str) -> dict[str, torch.Tensor]:
 
     # Try the canonical SAELens filename first
     candidate_files = ["sae_weights.safetensors", "model.safetensors"]
-    all_repo_files  = [f.rfilename for f in list_repo_files(repo_id)]
+    # list_repo_files returns strings in huggingface_hub >= 0.20, RepoFile objects in older versions
+    _repo_iter     = list_repo_files(repo_id)
+    all_repo_files = [f if isinstance(f, str) else f.rfilename for f in _repo_iter]
 
     # Prefer safetensors, fall back to .pt
     safetensor_files = [f for f in all_repo_files if f.endswith(".safetensors")]
