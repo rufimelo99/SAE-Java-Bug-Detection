@@ -47,7 +47,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 HERE = Path(__file__).parent
 ARTIFACTS = HERE.parents[1] / "artifacts" / "activations"
-SAE_RUN = ARTIFACTS / "run_20260227_212508_rufimelo" / "vulnerable_code_qwen_coder_standard_16384"
+# Original 2493-record run — used only for record selection (pre-computed activations + code text)
+SAE_RUN = ARTIFACTS / "run_20260218_134529_vulnerable_code_qwen_coder_standard_16384_10M"
 PAPER_FIGS = (
     HERE.parents[3]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
@@ -150,13 +151,16 @@ def load_sae_weights(repo_id: str, device: str) -> dict[str, torch.Tensor]:
     """
     print(f"Loading SAE from {repo_id} ...")
 
-    # Try the canonical SAELens filename first
-    candidate_files = ["sae_weights.safetensors", "model.safetensors"]
     # list_repo_files returns strings in huggingface_hub >= 0.20, RepoFile objects in older versions
     _repo_iter     = list_repo_files(repo_id)
     all_repo_files = [f if isinstance(f, str) else f.rfilename for f in _repo_iter]
 
-    # Prefer safetensors, fall back to .pt
+    # Prefer the layer-specific SAELens path, then generic fallbacks
+    candidate_files = [
+        f"blocks.{SAE_LAYER}.hook_resid_post/sae_weights.safetensors",  # layer-specific (SAELens)
+        "sae_weights.safetensors",
+        "model.safetensors",
+    ]
     safetensor_files = [f for f in all_repo_files if f.endswith(".safetensors")]
     pt_files         = [f for f in all_repo_files if f.endswith(".pt")]
 
@@ -231,13 +235,14 @@ def get_token_activations(
 
     resid = hidden["resid"][0]  # [seq_len, d_model]
 
-    # SAE encode: relu((x - b_dec) @ W_enc.T + b_enc)
-    W_enc = sae["W_enc"].cpu()   # [d_sae, d_model]
+    # SAE encode: relu((x - b_dec) @ W_enc + b_enc)
+    # W_enc is stored as [d_model, d_sae] in this SAELens release (no transpose needed)
+    W_enc = sae["W_enc"].cpu()   # [d_model, d_sae]
     b_enc = sae["b_enc"].cpu()   # [d_sae]
     b_dec = sae.get("b_dec", torch.zeros(resid.shape[-1])).cpu()  # [d_model]
 
     x_cent     = resid - b_dec.unsqueeze(0)       # [seq, d_model]
-    pre_acts   = x_cent @ W_enc.T + b_enc         # [seq, d_sae]
+    pre_acts   = x_cent @ W_enc + b_enc           # [seq, d_sae]
     feature_acts = F.relu(pre_acts).numpy()        # [seq, d_sae]
 
     # Readable token strings
