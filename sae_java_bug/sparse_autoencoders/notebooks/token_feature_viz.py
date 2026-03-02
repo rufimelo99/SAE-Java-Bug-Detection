@@ -496,6 +496,26 @@ def main():
 
         vmax = float(vmax_seq) * 1.05  # 5% headroom
 
+        # ── Save per-token activations to JSONL ───────────────────────────────
+        jsonl_path = args.out_dir / f"token_acts_feature_{feat_idx}.jsonl"
+        with jsonl_path.open("w") as jf:
+            for rec, (v_tokens, v_acts), (s_tokens, s_acts) in per_token_data:
+                jf.write(json.dumps({
+                    "feature_idx": feat_idx,
+                    "vuln_id":     rec["vuln_id"],
+                    "cwe":         rec["cwe"],
+                    "file_extension": rec.get("file_extension", ""),
+                    "vulnerable": [
+                        {"token": t, "activation": float(a)}
+                        for t, a in zip(v_tokens, v_acts[:, feat_idx].tolist())
+                    ],
+                    "secure": [
+                        {"token": t, "activation": float(a)}
+                        for t, a in zip(s_tokens, s_acts[:, feat_idx].tolist())
+                    ],
+                }) + "\n")
+        print(f"  Saved token activations: {jsonl_path}")
+
         out_path = args.out_dir / f"fig_token_feature_{feat_idx}.pdf"
         make_feature_figure(per_token_data, feat_idx, vmax, out_path)
 
