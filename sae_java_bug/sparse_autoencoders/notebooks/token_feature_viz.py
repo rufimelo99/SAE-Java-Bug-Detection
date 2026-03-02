@@ -323,8 +323,8 @@ def render_token_heatmap(
             fontfamily="monospace",
             ha="center", va="center",
             color=text_color,
-            bbox=dict(facecolor=color, edgecolor="none",
-                      pad=0.25, boxstyle="square,pad=0.25"),
+            bbox=dict(facecolor=color, edgecolor="#cccccc",
+                      linewidth=0.3, pad=0.25, boxstyle="square,pad=0.25"),
             zorder=2,
             clip_on=True,
         )
@@ -332,6 +332,7 @@ def render_token_heatmap(
 
     ax.set_xlim(-0.5, max_chars_per_line + 0.5)
     ax.set_ylim(-row - 1.5, 1.0)
+    ax.set_facecolor("#f5f5f5")
     ax.axis("off")
     ax.set_title(title, fontsize=7, fontweight="bold", pad=4)
 
