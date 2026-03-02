@@ -44,9 +44,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 HERE = Path(__file__).parent
-ARTIFACTS = HERE.parents[1] / "artifacts" / "activations"
+ARTIFACTS = HERE.parents[1] / "artifacts_study" / "activations"
 # Original 2493-record run — used only for record selection (pre-computed activations + code text)
-SAE_RUN = ARTIFACTS / "run_20260218_134529_vulnerable_code_qwen_coder_standard_16384_10M"
+SAE_RUN = ARTIFACTS / "run_20260227_212508_rufimelo" / "vulnerable_code_qwen_coder_standard_16384"
 PAPER_FIGS = (
     HERE.parents[3]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
@@ -454,6 +454,10 @@ def main():
         print(f"\n── Feature {feat_idx} ──")
 
         examples = top_examples(records, feat_idx, cwe_filter, args.n_examples)
+        for i, ex in enumerate(examples):
+            print(f"  Example {i+1}: vuln_id={ex['vuln_id']}  cwe={ex['cwe']}  "
+                  f"vuln_mean={ex['vulnerable_acts'][feat_idx]:.4f}  "
+                  f"sec_mean={ex['secure_acts'][feat_idx]:.4f}")
         if not examples:
             print(f"  No examples found, skipping.")
             continue
