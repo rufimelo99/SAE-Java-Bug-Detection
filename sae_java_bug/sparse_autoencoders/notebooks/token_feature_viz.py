@@ -217,7 +217,7 @@ def get_token_activations(
         return_tensors="pt",
         truncation=True,
         max_length=max_tokens,
-        add_special_tokens=True,
+        add_special_tokens=False,
     ).to(device)
 
     hidden = {}
@@ -232,6 +232,7 @@ def get_token_activations(
     handle.remove()
 
     resid = hidden["resid"][0]  # [seq_len, d_model]
+    print("Residual shape:", resid.shape)
 
     # SAE encode: relu((x - b_dec) @ W_enc + b_enc)
     # W_enc is stored as [d_model, d_sae] in this SAELens release (no transpose needed)
@@ -252,6 +253,8 @@ def get_token_activations(
         for t in raw_tokens
     ]
 
+    print(tokens[:10])
+    print("Number of tokens:", len(tokens))
     return tokens, feature_acts
 
 
@@ -430,7 +433,7 @@ def parse_args():
                    help="Filter examples to this CWE (e.g. CWE-119). Use 'all' for no filter.")
     p.add_argument("--n_examples",  type=int,  default=2,
                    help="Number of paired examples per feature")
-    p.add_argument("--max_tokens",  type=int,  default=180,
+    p.add_argument("--max_tokens",  type=int,  default=2048,
                    help="Truncate code to this many tokens")
     p.add_argument("--device",      type=str,  default="cuda",
                    help="Inference device: cuda / mps / cpu")
