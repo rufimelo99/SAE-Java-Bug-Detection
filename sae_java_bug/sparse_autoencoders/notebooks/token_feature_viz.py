@@ -310,7 +310,11 @@ def render_token_heatmap(
             row += 1
             col = 0
 
-        color = cmap(norm(act))
+        # Zero-activation tokens → neutral gray; non-zero → YlOrRd scale
+        if act < 1e-6:
+            color = (0.82, 0.82, 0.82, 1.0)  # medium gray
+        else:
+            color = cmap(norm(act))
         # Luminance-based text colour for readability
         lum = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
         text_color = "white" if lum < 0.45 else "#111111"
