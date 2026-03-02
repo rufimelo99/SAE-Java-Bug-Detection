@@ -33,9 +33,7 @@ import base64
 import json
 from pathlib import Path
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -261,6 +259,22 @@ def get_token_activations(
 # 4. Visualisation
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _count_display_rows(tokens: list[str], max_chars_per_line: int = 60) -> int:
+    """Count how many wrapped display rows a token list will occupy."""
+    col, rows = 0, 1
+    for tok in tokens:
+        if tok and "\n" in tok:
+            rows += 1
+            col = 0
+            continue
+        tok_len = max(len(tok) if tok else 1, 1)
+        if col > 0 and col + tok_len > max_chars_per_line:
+            rows += 1
+            col = 0
+        col += tok_len
+    return rows
+
+
 def render_token_heatmap(
     ax,
     tokens: list[str],
@@ -268,123 +282,135 @@ def render_token_heatmap(
     title: str,
     vmax: float,
     cmap,
-    max_chars_per_line: int = 55,
+    max_chars_per_line: int = 60,
 ):
     """
-    Draw tokens as coloured boxes on `ax`.
-    Line-wraps at actual newlines in the code or at max_chars_per_line.
-    """
-    norm   = plt.Normalize(vmin=0, vmax=vmax)
-    x0, y  = 0.01, 0.96
-    char_w = 1.0 / max_chars_per_line      # normalised width per character
-    row_h  = 0.10
-    gap    = char_w * 0.3
+    Draw tokens as coloured text boxes on `ax` using data coordinates.
 
-    col = 0  # character column tracker
+    Each token is rendered with ax.text(..., bbox=dict(facecolor=color, ...)).
+    x = character column, y = -row (rows go downward from 0).
+    """
+    vmax_safe = max(float(vmax), 1e-6)
+    norm = plt.Normalize(vmin=0, vmax=vmax_safe)
+    col = 0   # x: character column
+    row = 0   # display row (y = -row so rows go down)
 
     for tok, act in zip(tokens, activations):
-        # Hard line-break tokens
-        if tok.strip() == "" and "\n" in tok:
-            y  -= row_h
+        # Hard newline token → move to next row
+        if tok and "\n" in tok:
+            row += 1
             col = 0
-            x0  = 0.01
             continue
 
         display = tok if tok else " "
-        w = max(len(display), 1) * char_w + gap
+        tok_len = max(len(display), 1)
 
-        # Soft wrap
-        if col + len(display) > max_chars_per_line:
-            y  -= row_h
+        # Soft line-wrap
+        if col > 0 and col + tok_len > max_chars_per_line:
+            row += 1
             col = 0
-            x0  = 0.01
 
-        if y < 0.02:
-            break
+        color = cmap(norm(act))
+        # Luminance-based text colour for readability
+        lum = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
+        text_color = "white" if lum < 0.45 else "#111111"
 
-        color      = cmap(norm(act))
-        text_color = "white" if act > vmax * 0.60 else "#111111"
-
-        # Coloured background
-        ax.add_patch(mpatches.FancyBboxPatch(
-            (x0, y - row_h * 0.88), w - gap * 0.5, row_h * 0.85,
-            boxstyle="round,pad=0.002",
-            facecolor=color, edgecolor="none",
-            transform=ax.transAxes, clip_on=True, zorder=1,
-        ))
-
-        # Token text
         ax.text(
-            x0 + w * 0.5, y - row_h * 0.44,
+            col + tok_len * 0.5,  # x center
+            -row,                 # y: top row = 0, increases downward
             display,
-            fontsize=6.5, fontfamily="monospace",
+            fontsize=6,
+            fontfamily="monospace",
             ha="center", va="center",
             color=text_color,
-            transform=ax.transAxes, zorder=2,
+            bbox=dict(facecolor=color, edgecolor="none",
+                      pad=0.25, boxstyle="square,pad=0.25"),
+            zorder=2,
+            clip_on=True,
         )
+        col += tok_len
 
-        x0  += w
-        col += len(display)
-
-    ax.set_xlim(0, 1)
-    ax.set_ylim(max(0, y - row_h * 2), 1.0)
+    ax.set_xlim(-0.5, max_chars_per_line + 0.5)
+    ax.set_ylim(-row - 1.5, 1.0)
     ax.axis("off")
-    ax.set_title(title, fontsize=8, fontweight="bold", pad=3)
+    ax.set_title(title, fontsize=7, fontweight="bold", pad=4)
 
 
 def make_feature_figure(
-    records_and_acts: list[tuple[dict, np.ndarray, np.ndarray]],
+    records_and_acts: list[tuple[dict, tuple, tuple]],
     feature_idx: int,
     vmax: float,
     out_path: Path,
+    max_chars_per_line: int = 60,
 ):
     """
-    records_and_acts : list of (record, vuln_token_acts[seq, d_sae], sec_token_acts[seq, d_sae])
+    records_and_acts : list of (record, (v_tokens, v_acts[seq,d_sae]),
+                                        (s_tokens, s_acts[seq,d_sae]))
     Each row in the figure = one example pair (vulnerable | secure).
     """
-    n_rows  = len(records_and_acts)
-    fig_h   = 2.8 * n_rows + 0.4
-    fig, axes = plt.subplots(n_rows, 2, figsize=(6.75, fig_h))
-    if n_rows == 1:
-        axes = axes[np.newaxis, :]
+    try:
+        cmap = plt.colormaps["YlOrRd"]
+    except AttributeError:
+        import matplotlib.cm as _cm
+        cmap = _cm.get_cmap("YlOrRd")  # matplotlib < 3.7 fallback
 
-    cmap = cm.get_cmap("YlOrRd")
+    n_rows = len(records_and_acts)
 
-    for row_i, (rec, vuln_acts, sec_acts) in enumerate(records_and_acts):
-        v_tokens, v_acts_seq = vuln_acts
-        s_tokens, s_acts_seq = sec_acts
+    # Compute per-subplot height from number of wrapped display rows
+    row_heights = []
+    for _rec, (v_tokens, _), (s_tokens, _) in records_and_acts:
+        n_disp = max(
+            _count_display_rows(v_tokens, max_chars_per_line),
+            _count_display_rows(s_tokens, max_chars_per_line),
+        )
+        row_heights.append(max(n_disp * 0.20 + 0.5, 1.5))  # inches
+
+    total_h = sum(row_heights) + 1.0  # suptitle space
+    fig = plt.figure(figsize=(13.0, total_h))
+    gs = fig.add_gridspec(
+        n_rows, 2,
+        height_ratios=row_heights,
+        hspace=0.55, wspace=0.06,
+        left=0.01, right=0.91, top=0.93, bottom=0.02,
+    )
+
+    for row_i, (rec, (v_tokens, v_acts_seq), (s_tokens, s_acts_seq)) in enumerate(records_and_acts):
+        ax_v = fig.add_subplot(gs[row_i, 0])
+        ax_s = fig.add_subplot(gs[row_i, 1])
 
         v_feature = v_acts_seq[:, feature_idx]
         s_feature = s_acts_seq[:, feature_idx]
 
+        print(f"  row {row_i}: vuln max={v_feature.max():.4f}  secure max={s_feature.max():.4f}")
+
         vuln_title = (
-            f"Vulnerable  |  {rec['cwe']}  |  {rec['file_extension']}\n"
-            f"mean act = {v_feature.mean():.3f}  max = {v_feature.max():.3f}"
+            f"Vulnerable | {rec['cwe']} | {rec.get('file_extension', '?')}  "
+            f"(mean={v_feature.mean():.3f}, max={v_feature.max():.3f})"
         )
         sec_title = (
-            f"Secure (patched)\n"
-            f"mean act = {s_feature.mean():.3f}  max = {s_feature.max():.3f}"
+            f"Secure (patched)  "
+            f"(mean={s_feature.mean():.3f}, max={s_feature.max():.3f})"
         )
 
-        render_token_heatmap(axes[row_i, 0], v_tokens, v_feature, vuln_title, vmax, cmap)
-        render_token_heatmap(axes[row_i, 1], s_tokens, s_feature, sec_title,  vmax, cmap)
+        render_token_heatmap(ax_v, v_tokens, v_feature, vuln_title, vmax, cmap, max_chars_per_line)
+        render_token_heatmap(ax_s, s_tokens, s_feature, sec_title,  vmax, cmap, max_chars_per_line)
 
-    # Shared colourbar
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=vmax))
+    # Shared colorbar on the right
+    vmax_safe = max(float(vmax), 1e-6)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=0, vmax=vmax_safe))
     sm.set_array([])
-    cbar = fig.colorbar(sm, ax=axes.ravel().tolist(), fraction=0.015, pad=0.01)
+    cbar_ax = fig.add_axes([0.92, 0.08, 0.015, 0.80])
+    cbar = fig.colorbar(sm, cax=cbar_ax)
     cbar.set_label(f"Feature {feature_idx} activation", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
 
     fig.suptitle(
-        f"Per-token activation of SAE Feature {feature_idx} (Layer {SAE_LAYER})\n"
-        f"Colour intensity = feature activation; white = zero",
-        fontsize=9, y=1.01,
+        f"Per-token SAE Feature {feature_idx} activation  (Layer {SAE_LAYER})",
+        fontsize=9, y=0.98,
     )
-    fig.tight_layout()
-    fig.savefig(out_path, bbox_inches="tight")
+    fig.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
-    print(f"Saved: {out_path}")
+    print(f"  Saved: {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
