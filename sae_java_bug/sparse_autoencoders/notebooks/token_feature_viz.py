@@ -224,7 +224,7 @@ def get_token_activations(
 
     def _hook(module, inp, out):
         # out is a tuple; out[0] is the hidden state [batch, seq, d_model]
-        hidden["resid"] = out[0].detach().float().cpu()
+        hidden["resid"] = inp[0].detach().float().cpu()
 
     handle = model.model.layers[layer_idx].register_forward_hook(_hook)
     with torch.no_grad():
