@@ -46,7 +46,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 HERE = Path(__file__).parent
 ARTIFACTS = HERE.parents[1] / "artifacts_study" / "activations"
 # Original 2493-record run — used only for record selection (pre-computed activations + code text)
-SAE_RUN = ARTIFACTS / "run_20260227_212508_rufimelo" / "vulnerable_code_qwen_coder_standard_16384"
+SAE_RUN = ARTIFACTS / "run_20260301_031316_rufimelo" / "vulnerable_code_qwen_coder_standard_16384_raw"
 PAPER_FIGS = (
     HERE.parents[3]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
@@ -84,6 +84,7 @@ def load_records(sae_run: Path) -> list[dict]:
                      vulnerable (list[float] len=16384).
     """
     jsonl = next(sae_run.glob("activations_layer_*.jsonl"))
+    print(f"Loading records from {jsonl} ...")
     records = []
     with jsonl.open() as f:
         for line in f:
