@@ -497,6 +497,11 @@ def main():
 
     # ── Load meta + mean-pooled activations ───────────────────────────────────
     records = load_records(SAE_RUN)
+    from collections import Counter
+    cwe_counts = Counter(r["cwe"] for r in records)
+    print(f"CWE distribution in loaded JSONL ({len(records)} records):")
+    for cwe, n in sorted(cwe_counts.items(), key=lambda x: -x[1])[:15]:
+        print(f"  {cwe:<12} {n}")
 
     # ── Load model + SAE (heavy — only once) ──────────────────────────────────
     tokenizer, model = load_model(args.model_id, args.device)
