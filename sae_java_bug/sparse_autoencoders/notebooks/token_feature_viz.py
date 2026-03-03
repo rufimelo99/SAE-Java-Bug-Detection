@@ -44,9 +44,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 HERE = Path(__file__).parent
-ARTIFACTS = HERE.parents[1] / "artifacts" / "activations"
-# Full 2493-record run — used for record selection (pre-computed activations + code text)
-SAE_RUN = ARTIFACTS / "TO_UPLOAD"
+ARTIFACTS = HERE.parents[1] / "artifacts_study" / "activations"
+# Original 2493-record run — used only for record selection (pre-computed activations + code text)
+SAE_RUN = ARTIFACTS / "run_20260227_212508_rufimelo" / "vulnerable_code_qwen_coder_standard_16384"
 PAPER_FIGS = (
     HERE.parents[3]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
