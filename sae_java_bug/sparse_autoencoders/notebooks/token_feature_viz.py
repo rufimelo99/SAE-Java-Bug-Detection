@@ -388,17 +388,45 @@ def render_token_heatmap(
     ax.set_title(title, fontsize=7, fontweight="bold", pad=4)
 
 
+def _multi_family_examples(records: list[dict], feature_idx: int) -> list[dict]:
+    """Return 1 best-delta example each from memory, injection, and C-other families."""
+    mem_inj = CWE_FAMILIES["memory"] | CWE_FAMILIES["injection"]
+    groups = [
+        ("memory",    [r for r in records if r["cwe"] in CWE_FAMILIES["memory"]]),
+        ("injection", [r for r in records if r["cwe"] in CWE_FAMILIES["injection"]]),
+        ("c_other",   [r for r in records
+                       if r.get("file_extension", "") == "c" and r["cwe"] not in mem_inj]),
+    ]
+    examples = []
+    for label, pool in groups:
+        if not pool:
+            print(f"  [WARN] No examples for family '{label}'.")
+            continue
+        pool.sort(
+            key=lambda r: r["vulnerable_acts"][feature_idx] - r["secure_acts"][feature_idx],
+            reverse=True,
+        )
+        best = dict(pool[0])
+        best["_family_label"] = label
+        examples.append(best)
+        delta = best["vulnerable_acts"][feature_idx] - best["secure_acts"][feature_idx]
+        print(f"  [{label}] {best['vuln_id']}  cwe={best['cwe']}  delta={delta:.4f}")
+    return examples
+
+
 def make_feature_figure(
-    records_and_acts: list[tuple[dict, tuple, tuple]],
+    records_and_acts: list[tuple],
     feature_idx: int,
     vmax: float,
     out_path: Path,
     max_chars_per_line: int = 60,
+    vuln_only: bool = False,
 ):
     """
     records_and_acts : list of (record, (v_tokens, v_acts[seq,d_sae]),
-                                        (s_tokens, s_acts[seq,d_sae]))
-    Each row in the figure = one example pair (vulnerable | secure).
+                                        (s_tokens|None, s_acts|None))
+    Each row in the figure = one example. If vuln_only=True, only the
+    vulnerable side is rendered (single-column layout).
     """
     try:
         cmap = plt.colormaps["YlOrRd"]
@@ -407,45 +435,50 @@ def make_feature_figure(
         cmap = _cm.get_cmap("YlOrRd")  # matplotlib < 3.7 fallback
 
     n_rows = len(records_and_acts)
+    n_cols = 1 if vuln_only else 2
 
     # Compute per-subplot height from number of wrapped display rows
     row_heights = []
-    for _, (v_tokens, _), (s_tokens, _) in records_and_acts:
-        n_disp = max(
-            _count_display_rows(v_tokens, max_chars_per_line),
-            _count_display_rows(s_tokens, max_chars_per_line),
-        )
-        row_heights.append(max(n_disp * 0.20 + 0.5, 1.5))  # inches
+    for _, (v_tokens, _), sec_data in records_and_acts:
+        candidates = [_count_display_rows(v_tokens, max_chars_per_line)]
+        if not vuln_only and sec_data is not None and sec_data[0] is not None:
+            candidates.append(_count_display_rows(sec_data[0], max_chars_per_line))
+        row_heights.append(max(max(candidates) * 0.20 + 0.5, 1.5))  # inches
 
     total_h = sum(row_heights) + 1.0  # suptitle space
-    fig = plt.figure(figsize=(13.0, total_h))
+    fig_w = 7.0 if vuln_only else 13.0
+    fig = plt.figure(figsize=(fig_w, total_h))
     gs = fig.add_gridspec(
-        n_rows, 2,
+        n_rows, n_cols,
         height_ratios=row_heights,
         hspace=0.55, wspace=0.06,
         left=0.01, right=0.91, top=0.93, bottom=0.02,
     )
 
-    for row_i, (rec, (v_tokens, v_acts_seq), (s_tokens, s_acts_seq)) in enumerate(records_and_acts):
+    for row_i, (rec, (v_tokens, v_acts_seq), sec_data) in enumerate(records_and_acts):
         ax_v = fig.add_subplot(gs[row_i, 0])
-        ax_s = fig.add_subplot(gs[row_i, 1])
-
         v_feature = v_acts_seq[:, feature_idx]
-        s_feature = s_acts_seq[:, feature_idx]
 
-        print(f"  row {row_i}: vuln max={v_feature.max():.4f}  secure max={s_feature.max():.4f}")
+        print(f"  row {row_i}: vuln max={v_feature.max():.4f}")
 
+        family_label = rec.get("_family_label", "")
+        family_str = f" [{family_label}]" if family_label else ""
         vuln_title = (
-            f"Vulnerable | {rec['cwe']} | {rec.get('file_extension', '?')}  "
+            f"Vulnerable{family_str} | {rec['cwe']} | {rec.get('file_extension', '?')}  "
             f"(mean={v_feature.mean():.3f}, max={v_feature.max():.3f})"
         )
-        sec_title = (
-            f"Secure (patched)  "
-            f"(mean={s_feature.mean():.3f}, max={s_feature.max():.3f})"
-        )
-
         render_token_heatmap(ax_v, v_tokens, v_feature, vuln_title, vmax, cmap, max_chars_per_line)
-        render_token_heatmap(ax_s, s_tokens, s_feature, sec_title,  vmax, cmap, max_chars_per_line)
+
+        if not vuln_only and sec_data is not None and sec_data[0] is not None:
+            ax_s = fig.add_subplot(gs[row_i, 1])
+            s_tokens, s_acts_seq = sec_data
+            s_feature = s_acts_seq[:, feature_idx]
+            print(f"            secure max={s_feature.max():.4f}")
+            sec_title = (
+                f"Secure (patched)  "
+                f"(mean={s_feature.mean():.3f}, max={s_feature.max():.3f})"
+            )
+            render_token_heatmap(ax_s, s_tokens, s_feature, sec_title, vmax, cmap, max_chars_per_line)
 
     # Shared colorbar on the right
     vmax_safe = max(float(vmax), 1e-6)
@@ -489,6 +522,12 @@ def parse_args():
                    help="Output directory for PDF figures")
     p.add_argument("--model_id",    type=str,  default=MODEL_ID)
     p.add_argument("--sae_repo",    type=str,  default=SAE_REPO)
+    p.add_argument("--sae_run",     type=Path, default=SAE_RUN,
+                   help="Path to SAE run directory containing activations_layer_*.jsonl")
+    p.add_argument("--vuln_only",   action="store_true", default=False,
+                   help="Only render the vulnerable subplot (skip secure/patched).")
+    p.add_argument("--multi_family", action="store_true", default=False,
+                   help="Select 1 example each from memory, injection, and C-other families.")
     return p.parse_args()
 
 
@@ -497,7 +536,7 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Load meta + mean-pooled activations ───────────────────────────────────
-    records = load_records(SAE_RUN)
+    records = load_records(args.sae_run)
     from collections import Counter
     cwe_counts = Counter(r["cwe"] for r in records)
     print(f"CWE distribution in loaded JSONL ({len(records)} records):")
@@ -512,13 +551,16 @@ def main():
     for feat_idx in args.features:
         print(f"\n── Feature {feat_idx} ──")
 
-        examples = top_examples(
-            records, feat_idx,
-            cwe=args.cwe,
-            cwe_family=args.cwe_family,
-            vuln_ids=args.vuln_id,
-            n=args.n_examples,
-        )
+        if args.multi_family:
+            examples = _multi_family_examples(records, feat_idx)
+        else:
+            examples = top_examples(
+                records, feat_idx,
+                cwe=args.cwe,
+                cwe_family=args.cwe_family,
+                vuln_ids=args.vuln_id,
+                n=args.n_examples,
+            )
         for i, ex in enumerate(examples):
             print(f"  Example {i+1}: vuln_id={ex['vuln_id']}  cwe={ex['cwe']}  "
                   f"vuln_mean={ex['vulnerable_acts'][feat_idx]:.4f}  "
@@ -539,15 +581,16 @@ def main():
                 model, tokenizer, sae,
                 rec["vulnerable_code_text"], SAE_LAYER, args.device, args.max_tokens,
             )
-            s_tokens, s_acts = get_token_activations(
-                model, tokenizer, sae,
-                rec["secure_code_text"], SAE_LAYER, args.device, args.max_tokens,
-            )
+            vmax_seq = max(vmax_seq, v_acts[:, feat_idx].max())
 
-            # Update vmax from per-token observations
-            vmax_seq = max(vmax_seq,
-                           v_acts[:, feat_idx].max(),
-                           s_acts[:, feat_idx].max())
+            if args.vuln_only:
+                s_tokens, s_acts = None, None
+            else:
+                s_tokens, s_acts = get_token_activations(
+                    model, tokenizer, sae,
+                    rec["secure_code_text"], SAE_LAYER, args.device, args.max_tokens,
+                )
+                vmax_seq = max(vmax_seq, s_acts[:, feat_idx].max())
 
             per_token_data.append((rec, (v_tokens, v_acts), (s_tokens, s_acts)))
 
@@ -569,12 +612,12 @@ def main():
                     "secure": [
                         {"token": t, "activation": float(a)}
                         for t, a in zip(s_tokens, s_acts[:, feat_idx].tolist())
-                    ],
+                    ] if s_tokens is not None else [],
                 }) + "\n")
         print(f"  Saved token activations: {jsonl_path}")
 
         out_path = args.out_dir / f"fig_token_feature_{feat_idx}.pdf"
-        make_feature_figure(per_token_data, feat_idx, vmax, out_path)
+        make_feature_figure(per_token_data, feat_idx, vmax, out_path, vuln_only=args.vuln_only)
 
     print("\nDone.")
 
