@@ -101,17 +101,60 @@ def load_records(sae_run: Path) -> list[dict]:
     return records
 
 
-def top_examples(records: list[dict], feature_idx: int, cwe: str | None,
-                 n: int) -> list[dict]:
+MEM_CORRUPTION_CWES = {"CWE-119", "CWE-125", "CWE-787", "CWE-190", "CWE-189",
+                       "CWE-120", "CWE-416", "CWE-415", "CWE-401"}
+
+CWE_FAMILIES: dict[str, set[str]] = {
+    "memory":     MEM_CORRUPTION_CWES,
+    "injection":  {"CWE-89", "CWE-79", "CWE-78", "CWE-94", "CWE-77"},
+    "access":     {"CWE-264", "CWE-287", "CWE-22", "CWE-284", "CWE-285"},
+    "resource":   {"CWE-400", "CWE-399", "CWE-369", "CWE-362", "CWE-20"},
+    "disclosure": {"CWE-200", "CWE-209"},
+}
+
+
+def top_examples(
+    records: list[dict],
+    feature_idx: int,
+    cwe: str | None,
+    cwe_family: str | None,
+    vuln_ids: list[str] | None,
+    n: int,
+) -> list[dict]:
     """
-    Select top-N records by vulnerable_acts[feature_idx].
-    Optionally filter to a specific CWE.
+    Select top-N records, ranked by vuln−secure delta for feature_idx.
+
+    Filtering priority (highest to lowest):
+      --vuln_id   → pin specific records by ID (ignores n)
+      --cwe       → exact CWE match  (e.g. CWE-119)
+      --cwe_family → named family     (e.g. memory, injection)
+      (none)      → all records
     """
-    pool = [r for r in records if cwe is None or r["cwe"] == cwe]
+    if vuln_ids:
+        pool = [r for r in records if r["vuln_id"] in vuln_ids]
+        if not pool:
+            print(f"  [WARN] No records match vuln_ids={vuln_ids}.")
+        return pool
+
+    if cwe is not None:
+        pool = [r for r in records if r["cwe"] == cwe]
+    elif cwe_family is not None:
+        family_cwes = CWE_FAMILIES.get(cwe_family.lower(), set())
+        if not family_cwes:
+            print(f"  [WARN] Unknown family '{cwe_family}'. Known: {list(CWE_FAMILIES)}")
+        pool = [r for r in records if r["cwe"] in family_cwes]
+    else:
+        pool = list(records)
+
     if not pool:
-        print(f"  [WARN] No records match CWE={cwe}; using all CWEs.")
-        pool = records
-    pool.sort(key=lambda r: r["vulnerable_acts"][feature_idx], reverse=True)
+        print(f"  [WARN] Empty pool; falling back to all records.")
+        pool = list(records)
+
+    # Rank by vuln−secure delta (most discriminative examples first)
+    pool.sort(
+        key=lambda r: r["vulnerable_acts"][feature_idx] - r["secure_acts"][feature_idx],
+        reverse=True,
+    )
     return pool[:n]
 
 
@@ -366,7 +409,7 @@ def make_feature_figure(
 
     # Compute per-subplot height from number of wrapped display rows
     row_heights = []
-    for _rec, (v_tokens, _), (s_tokens, _) in records_and_acts:
+    for _, (v_tokens, _), (s_tokens, _) in records_and_acts:
         n_disp = max(
             _count_display_rows(v_tokens, max_chars_per_line),
             _count_display_rows(s_tokens, max_chars_per_line),
@@ -429,8 +472,12 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--features",    nargs="+", type=int, default=[1797, 9193],
                    help="SAE feature indices to visualise")
-    p.add_argument("--cwe",         type=str,  default="CWE-119",
-                   help="Filter examples to this CWE (e.g. CWE-119). Use 'all' for no filter.")
+    p.add_argument("--cwe",         type=str,  default=None,
+                   help="Filter to a single CWE (e.g. CWE-119). Overrides --cwe_family.")
+    p.add_argument("--cwe_family",  type=str,  default="memory",
+                   help="Filter to a named CWE family: memory, injection, access, resource, disclosure.")
+    p.add_argument("--vuln_id",     nargs="+", type=str, default=None,
+                   help="Pin specific vuln_ids (overrides --cwe / --cwe_family).")
     p.add_argument("--n_examples",  type=int,  default=2,
                    help="Number of paired examples per feature")
     p.add_argument("--max_tokens",  type=int,  default=2048,
@@ -448,8 +495,6 @@ def main():
     args = parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    cwe_filter = None if args.cwe.lower() == "all" else args.cwe
-
     # ── Load meta + mean-pooled activations ───────────────────────────────────
     records = load_records(SAE_RUN)
 
@@ -461,7 +506,13 @@ def main():
     for feat_idx in args.features:
         print(f"\n── Feature {feat_idx} ──")
 
-        examples = top_examples(records, feat_idx, cwe_filter, args.n_examples)
+        examples = top_examples(
+            records, feat_idx,
+            cwe=args.cwe,
+            cwe_family=args.cwe_family,
+            vuln_ids=args.vuln_id,
+            n=args.n_examples,
+        )
         for i, ex in enumerate(examples):
             print(f"  Example {i+1}: vuln_id={ex['vuln_id']}  cwe={ex['cwe']}  "
                   f"vuln_mean={ex['vulnerable_acts'][feat_idx]:.4f}  "
