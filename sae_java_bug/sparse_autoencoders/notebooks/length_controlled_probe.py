@@ -1,13 +1,13 @@
 """
 Length-controlled re-analysis of vuln-vs-secure probe.
 
-Vulnerable files are on average 22% longer than secure files (mean 823 vs 673 chars).
-This script tests whether that length difference drives the observed activation differences.
+Uses actual tokenizer token counts (Qwen2.5-7B-Instruct tokenizer) rather than
+character lengths as a proxy.
 
 Two controls:
-  1. Length-residualized: regress log(char_len) out of both S and V matrices via Ridge,
+  1. Length-residualized: regress log(tok_len) out of both S and V matrices via Ridge,
      then probe the residuals.  If AUROC doesn't change, length is not driving anything.
-  2. Length-stratified: bin pairs by len_ratio = char_len_vuln / char_len_secure into
+  2. Length-stratified: bin pairs by len_ratio = tok_len_vuln / tok_len_secure into
      quartiles and probe within each bin.  Consistent near-chance across bins rules out
      a length-driven effect.
 
@@ -33,6 +33,7 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 warnings.filterwarnings("ignore")
 
@@ -47,6 +48,14 @@ PAPER_FIGS.mkdir(parents=True, exist_ok=True)
 
 SEED = 42
 np.random.seed(SEED)
+
+MODEL_ID  = "Qwen/Qwen2.5-7B-Instruct"
+try:
+    _TOKENIZER = AutoTokenizer.from_pretrained(MODEL_ID)
+    print(f"Tokenizer loaded: {MODEL_ID}")
+except Exception as _e:
+    print(f"[WARN] Could not load tokenizer ({_e}); falling back to character length")
+    _TOKENIZER = None
 
 mpl.rcParams.update({
     "font.family":     "serif",
@@ -77,12 +86,16 @@ RUNS_REGISTRY = [
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
-def _char_len(b64_str):
-    """Decode base64 source code and return character count."""
+def _tok_len(b64_str) -> int:
+    """Decode base64 source code and return tokenizer token count.
+    Falls back to character count if tokenizer is unavailable."""
     try:
-        return len(base64.b64decode(b64_str).decode("utf-8", errors="replace"))
+        code = base64.b64decode(b64_str).decode("utf-8", errors="replace")
     except Exception:
-        return len(b64_str) if isinstance(b64_str, str) else 0
+        code = b64_str if isinstance(b64_str, str) else ""
+    if _TOKENIZER is not None:
+        return len(_TOKENIZER.encode(code, add_special_tokens=False))
+    return len(code)
 
 
 def load_jsonl(jsonl_path):
@@ -102,8 +115,8 @@ def load_jsonl(jsonl_path):
                 "vuln_id":        r["vuln_id"],
                 "cwe":            r["cwe"],
                 "file_extension": r["file_extension"],
-                "char_len_secure": _char_len(r.get("secure_code", "")),
-                "char_len_vuln":   _char_len(r.get("vulnerable_code", "")),
+                "tok_len_secure": _tok_len(r.get("secure_code", "")),
+                "tok_len_vuln":   _tok_len(r.get("vulnerable_code", "")),
             })
     safe_mat = np.array(secure_rows, dtype=np.float32)
     vuln_mat = np.array(vuln_rows,   dtype=np.float32)
@@ -124,8 +137,8 @@ def load_meta_only(jsonl_path):
                 "vuln_id":         r["vuln_id"],
                 "cwe":             r["cwe"],
                 "file_extension":  r["file_extension"],
-                "char_len_secure": _char_len(r.get("secure_code", "")),
-                "char_len_vuln":   _char_len(r.get("vulnerable_code", "")),
+                "tok_len_secure": _tok_len(r.get("secure_code", "")),
+                "tok_len_vuln":   _tok_len(r.get("vulnerable_code", "")),
             })
     return pd.DataFrame(rows)
 
@@ -220,12 +233,12 @@ def run_probe(S, V, n_components=50, cv=5, n_bootstrap=500):
 
 def residualise_length(S, V, meta):
     """
-    Regress log(char_len) out of both activation matrices via Ridge.
+    Regress log(tok_len) out of both activation matrices via Ridge.
     Each side is residualised with its own length covariate.
     Returns (S_residualised, V_residualised).
     """
-    log_s = np.log1p(meta["char_len_secure"].values).reshape(-1, 1).astype(np.float32)
-    log_v = np.log1p(meta["char_len_vuln"].values).reshape(-1, 1).astype(np.float32)
+    log_s = np.log1p(meta["tok_len_secure"].values).reshape(-1, 1).astype(np.float32)
+    log_v = np.log1p(meta["tok_len_vuln"].values).reshape(-1, 1).astype(np.float32)
 
     # Fit one Ridge on all 2n rows so both sides use the same regression
     X_all = np.vstack([S, V])
@@ -240,10 +253,10 @@ def residualise_length(S, V, meta):
 
 def stratified_by_length_ratio(S, V, meta, n_quartiles=4, n_components=30, n_bootstrap=500):
     """
-    Bin pairs by len_ratio = char_len_vuln / char_len_secure into n_quartiles.
+    Bin pairs by len_ratio = tok_len_vuln / tok_len_secure into n_quartiles.
     Probe within each bin.  Returns list of result dicts (None if bin too small).
     """
-    ratio  = (meta["char_len_vuln"].values + 1.0) / (meta["char_len_secure"].values + 1.0)
+    ratio  = (meta["tok_len_vuln"].values + 1.0) / (meta["tok_len_secure"].values + 1.0)
     edges  = np.quantile(ratio, np.linspace(0, 1, n_quartiles + 1))
     results = []
     for q in range(n_quartiles):
@@ -362,7 +375,7 @@ def fig_length_controlled(layers_data):
             ax_right.axhline(0.5, color="grey", lw=0.7, ls=":", alpha=0.5, label="Chance")
             ax_right.set_xticks(x_bars)
             ax_right.set_xticklabels(labels, fontsize=7)
-            ax_right.set_xlabel("Length-ratio quartile  (char_len_vuln / char_len_secure)  at L11")
+            ax_right.set_xlabel("Length-ratio quartile  (tok_len_vuln / tok_len_secure)  at L11")
             ax_right.set_ylabel("ROC-AUC")
             ax_right.set_title(f"{run_name}: stratified by length ratio (L11)", fontweight="bold")
             ax_right.set_ylim(0.35, 0.65)
@@ -410,20 +423,20 @@ def fig_length_controlled(layers_data):
 # ── Length distribution summary ───────────────────────────────────────────────
 
 def print_length_stats(layers_data):
-    """Print char-length summary from one layer's metadata (representative)."""
+    """Print token-length summary from one layer's metadata (representative)."""
     label = next(iter(layers_data))
     _, _, meta = layers_data[label]
-    ratio = (meta["char_len_vuln"] + 1) / (meta["char_len_secure"] + 1)
-    print("\nChar-length summary (from first loaded layer):")
-    print(f"  Secure  — mean={meta['char_len_secure'].mean():.0f}  "
-          f"median={meta['char_len_secure'].median():.0f}  "
-          f"std={meta['char_len_secure'].std():.0f}")
-    print(f"  Vuln    — mean={meta['char_len_vuln'].mean():.0f}  "
-          f"median={meta['char_len_vuln'].median():.0f}  "
-          f"std={meta['char_len_vuln'].std():.0f}")
+    ratio = (meta["tok_len_vuln"] + 1) / (meta["tok_len_secure"] + 1)
+    print("\nToken-length summary (from first loaded layer):")
+    print(f"  Secure  — mean={meta['tok_len_secure'].mean():.0f}  "
+          f"median={meta['tok_len_secure'].median():.0f}  "
+          f"std={meta['tok_len_secure'].std():.0f}")
+    print(f"  Vuln    — mean={meta['tok_len_vuln'].mean():.0f}  "
+          f"median={meta['tok_len_vuln'].median():.0f}  "
+          f"std={meta['tok_len_vuln'].std():.0f}")
     print(f"  Ratio (vuln/secure) — mean={ratio.mean():.3f}  "
           f"median={ratio.median():.3f}  "
-          f"% vuln > secure: {(meta['char_len_vuln'] > meta['char_len_secure']).mean()*100:.1f}%")
+          f"% vuln > secure: {(meta['tok_len_vuln'] > meta['tok_len_secure']).mean()*100:.1f}%")
     print(f"  Quartile edges: {np.quantile(ratio, [0, 0.25, 0.5, 0.75, 1.0]).round(3)}")
 
 

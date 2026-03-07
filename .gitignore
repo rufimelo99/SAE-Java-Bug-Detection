@@ -198,3 +198,4 @@ cython_debug/
 /sae_java_bug/artifacts/sae_DeltaSecommits_cl_qwen_coder_blocks.0.hook_resid_post/cl_secure_code_qwen_coder_topk_16384_raw
 *.pkl
 *DS_Store
+/.claude
