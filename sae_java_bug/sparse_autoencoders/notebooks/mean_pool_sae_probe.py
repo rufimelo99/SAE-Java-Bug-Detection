@@ -13,7 +13,7 @@ The key new experiment (4) is what the reviewer asked in Q3:
    then averaging features)?"
 
 Usage (on GPU server):
-    conda run -n sae python mean_pool_sae_probe.py
+    conda run -n sae python mean_pool_sae_probe.py [--checkpoint_dir PATH]
 
 Saves:
     artifacts/activations/mean_pool_sae/<run_ts>/
@@ -23,6 +23,12 @@ Saves:
         vulnerable_enc_of_mean_layer_11.pt
         probe_results.json
     Paper figures dir / fig_mean_pool_sae_comparison.pdf
+
+Checkpointing (to survive interruption):
+    A JSONL checkpoint is written incrementally to <out_dir>/checkpoint.jsonl.
+    If the script is re-run with --checkpoint_dir pointing to an existing out_dir,
+    it skips already-processed samples and resumes from where it left off.
+    Pass --checkpoint_dir auto to automatically find the most recent incomplete run.
 """
 
 import json
@@ -211,6 +217,9 @@ def extract_mean_sae(
     Returns:
       mean_sae_vec   : mean over token positions of per-token SAE features  [d_sae]
       enc_of_mean_vec: SAE encoding of the mean residual vector              [d_sae]
+
+    Uses a forward hook to capture only layer `layer` activations, avoiding
+    materialising all 28 hidden states simultaneously (saves ~400 MB VRAM).
     """
     inputs = tokenizer(
         code_str,
@@ -219,22 +228,29 @@ def extract_mean_sae(
         max_length=max_tokens,
     ).to(device)
 
-    with torch.no_grad():
-        outputs = model(**inputs, output_hidden_states=True)
+    # Hook captures post-resid output of transformer layer `layer` only
+    captured: dict = {}
 
-    # hidden_states[layer+1] is the output of transformer block `layer`
-    h = outputs.hidden_states[layer + 1][0].float()   # [seq_len, d_model]
+    def _hook(module, inp, out):
+        # Qwen2 decoder layers return a tuple; element 0 is hidden states
+        captured["h"] = out[0].detach().float().cpu()   # [1, seq_len, d_model]
 
-    # Move to SAE weight device for encoding
-    h_cpu = h.cpu()
+    hook = model.model.layers[layer].register_forward_hook(_hook)
+    try:
+        with torch.no_grad():
+            model(**inputs)
+    finally:
+        hook.remove()
+
+    h = captured["h"][0]   # [seq_len, d_model]
 
     # (4) mean-token SAE: encode each token, then average
-    sae_feats = sae_encode_batch(h_cpu, sae_weights)    # [seq_len, d_sae]
+    sae_feats = sae_encode_batch(h, sae_weights)        # [seq_len, d_sae]
     mean_sae  = sae_feats.mean(dim=0).numpy()           # [d_sae]
 
     # (5) encode-of-mean: average residuals first, then encode once
-    mean_resid     = h_cpu.mean(dim=0, keepdim=True)    # [1, d_model]
-    enc_of_mean    = sae_encode_batch(mean_resid, sae_weights)[0].numpy()  # [d_sae]
+    mean_resid  = h.mean(dim=0, keepdim=True)           # [1, d_model]
+    enc_of_mean = sae_encode_batch(mean_resid, sae_weights)[0].numpy()  # [d_sae]
 
     return mean_sae, enc_of_mean
 
@@ -419,7 +435,42 @@ def fig_comparison(results: dict[str, dict | None], out_path: Path):
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _find_most_recent_incomplete_run() -> Path | None:
+    """Return the most recent mean_pool_sae run dir that has a checkpoint but no probe_results."""
+    root = ARTIFACTS / "mean_pool_sae"
+    if not root.exists():
+        return None
+    for run_dir in sorted(root.iterdir(), reverse=True):
+        ckpt = run_dir / "checkpoint.jsonl"
+        done = run_dir / "probe_results.json"
+        if ckpt.exists() and not done.exists():
+            return run_dir
+    return None
+
+
+def _load_checkpoint(ckpt_path: Path) -> tuple[list[dict], set[str]]:
+    """Load existing checkpoint records. Returns (records_list, seen_vuln_ids)."""
+    records, seen = [], set()
+    with ckpt_path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            r = json.loads(line)
+            records.append(r)
+            seen.add(r["vuln_id"])
+    return records, seen
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--checkpoint_dir", default=None,
+        help="Path to an existing out_dir to resume from, or 'auto' to find most recent."
+    )
+    args = parser.parse_args()
+
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print(f"Device: {device}")
     print(f"Source JSONL: {SOURCE_JSONL}")
@@ -442,47 +493,95 @@ def main():
     records = load_source_records(SOURCE_JSONL)
     print(f"  {len(records)} samples loaded")
 
-    # ── 4. Extract mean-token SAE activations ─────────────────────────────────
-    ts      = time.strftime("%Y%m%d_%H%M%S")
-    out_dir = ARTIFACTS / "mean_pool_sae" / ts
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # ── 4. Set up output directory (new or resume) ────────────────────────────
+    resume_dir = None
+    if args.checkpoint_dir:
+        if args.checkpoint_dir == "auto":
+            resume_dir = _find_most_recent_incomplete_run()
+            if resume_dir:
+                print(f"\nAuto-resuming from: {resume_dir}")
+            else:
+                print("\nNo incomplete run found; starting fresh.")
+        else:
+            resume_dir = Path(args.checkpoint_dir)
+            if not resume_dir.exists():
+                print(f"[WARN] --checkpoint_dir {resume_dir} not found; starting fresh.")
+                resume_dir = None
 
-    safe_mean_sae,  vuln_mean_sae  = [], []
-    safe_enc_mean,  vuln_enc_mean  = [], []
+    if resume_dir:
+        out_dir = resume_dir
+        ts      = out_dir.name
+    else:
+        ts      = time.strftime("%Y%m%d_%H%M%S")
+        out_dir = ARTIFACTS / "mean_pool_sae" / ts
+        out_dir.mkdir(parents=True, exist_ok=True)
 
+    ckpt_path = out_dir / "checkpoint.jsonl"
+    print(f"Output dir: {out_dir}")
+
+    # Load existing checkpoint if resuming
+    ckpt_records: list[dict] = []
+    seen_ids: set[str]       = set()
+    if ckpt_path.exists():
+        ckpt_records, seen_ids = _load_checkpoint(ckpt_path)
+        print(f"  Resuming: {len(ckpt_records)} samples already processed, "
+              f"{len(records) - len(ckpt_records)} remaining.")
+
+    # ── 5. Extract mean-token SAE activations (with checkpointing) ───────────
     print(f"\nExtracting mean-token SAE activations at L{SAE_LAYER} "
           f"({len(records)} samples × 2 sides)...")
     t0 = time.time()
-    for i, rec in enumerate(records):
-        if (i + 1) % 100 == 0:
-            elapsed = time.time() - t0
-            eta     = elapsed / (i + 1) * (len(records) - i - 1)
-            print(f"  [{i+1:>4}/{len(records)}]  elapsed {elapsed:.0f}s  ETA {eta:.0f}s")
 
-        try:
-            s_ms, s_em = extract_mean_sae(rec["secure_code"],   tokenizer, model,
-                                          sae_weights, SAE_LAYER, device)
-            v_ms, v_em = extract_mean_sae(rec["vulnerable_code"], tokenizer, model,
-                                          sae_weights, SAE_LAYER, device)
-        except Exception as e:
-            print(f"  [WARN] sample {i} ({rec['vuln_id']}): {e}")
-            d_sae = sae_weights["b_enc"].shape[0]
-            s_ms = s_em = v_ms = v_em = np.zeros(d_sae, dtype=np.float32)
+    d_sae = sae_weights["b_enc"].shape[0]
 
-        safe_mean_sae.append(s_ms);  vuln_mean_sae.append(v_ms)
-        safe_enc_mean.append(s_em);  vuln_enc_mean.append(v_em)
+    with ckpt_path.open("a") as ckpt_f:
+        for i, rec in enumerate(records):
+            if rec["vuln_id"] in seen_ids:
+                continue  # already done in a previous run
+
+            if (i + 1) % 100 == 0:
+                elapsed = time.time() - t0
+                done_so_far = len(ckpt_records) + (i - len(seen_ids))
+                if done_so_far > 0:
+                    eta = elapsed / done_so_far * (len(records) - done_so_far)
+                    print(f"  [{i+1:>4}/{len(records)}]  elapsed {elapsed:.0f}s  ETA {eta:.0f}s")
+
+            try:
+                s_ms, s_em = extract_mean_sae(rec["secure_code"],    tokenizer, model,
+                                              sae_weights, SAE_LAYER, device)
+                v_ms, v_em = extract_mean_sae(rec["vulnerable_code"], tokenizer, model,
+                                              sae_weights, SAE_LAYER, device)
+            except Exception as e:
+                print(f"  [WARN] sample {i} ({rec['vuln_id']}): {e}")
+                s_ms = s_em = v_ms = v_em = np.zeros(d_sae, dtype=np.float32)
+
+            row = {
+                "vuln_id":        rec["vuln_id"],
+                "cwe":            rec["cwe"],
+                "file_extension": rec["file_extension"],
+                "safe_mean_sae":  s_ms.tolist(),
+                "vuln_mean_sae":  v_ms.tolist(),
+                "safe_enc_mean":  s_em.tolist(),
+                "vuln_enc_mean":  v_em.tolist(),
+            }
+            ckpt_f.write(json.dumps(row) + "\n")
+            ckpt_f.flush()
+            ckpt_records.append(row)
+
+    print(f"  Checkpoint complete: {len(ckpt_records)} records in {ckpt_path.name}")
+
+    # Reconstruct matrices from checkpoint
+    safe_mean_sae_mat = np.array([r["safe_mean_sae"] for r in ckpt_records], dtype=np.float32)
+    vuln_mean_sae_mat = np.array([r["vuln_mean_sae"] for r in ckpt_records], dtype=np.float32)
+    safe_enc_mean_mat = np.array([r["safe_enc_mean"] for r in ckpt_records], dtype=np.float32)
+    vuln_enc_mean_mat = np.array([r["vuln_enc_mean"] for r in ckpt_records], dtype=np.float32)
 
     # ── 5. Save tensors ───────────────────────────────────────────────────────
     print(f"\nSaving tensors to {out_dir} ...")
-    def _save(arr_list, name):
-        t = torch.tensor(np.array(arr_list), dtype=torch.float32)
-        torch.save(t, out_dir / name)
-        return t.numpy()
-
-    safe_mean_sae_mat = _save(safe_mean_sae, f"safe_mean_sae_layer_{SAE_LAYER}.pt")
-    vuln_mean_sae_mat = _save(vuln_mean_sae, f"vulnerable_mean_sae_layer_{SAE_LAYER}.pt")
-    safe_enc_mean_mat = _save(safe_enc_mean, f"safe_enc_of_mean_layer_{SAE_LAYER}.pt")
-    vuln_enc_mean_mat = _save(vuln_enc_mean, f"vulnerable_enc_of_mean_layer_{SAE_LAYER}.pt")
+    torch.save(torch.tensor(safe_mean_sae_mat), out_dir / f"safe_mean_sae_layer_{SAE_LAYER}.pt")
+    torch.save(torch.tensor(vuln_mean_sae_mat), out_dir / f"vulnerable_mean_sae_layer_{SAE_LAYER}.pt")
+    torch.save(torch.tensor(safe_enc_mean_mat), out_dir / f"safe_enc_of_mean_layer_{SAE_LAYER}.pt")
+    torch.save(torch.tensor(vuln_enc_mean_mat), out_dir / f"vulnerable_enc_of_mean_layer_{SAE_LAYER}.pt")
     print("  Done.")
 
     # ── 6. Run probes — new conditions ────────────────────────────────────────
