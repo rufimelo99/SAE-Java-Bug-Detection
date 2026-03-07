@@ -380,6 +380,18 @@ def main():
     fig_path = PAPER_FIGS / "fig_mean_vs_last_token_pool.pdf"
     fig_mean_vs_last(last_results, mean_results, fig_path)
 
+    # ── 8. Save probe results as JSON ─────────────────────────────────────────
+    results_payload = {
+        "run_ts": ts,
+        "layers": LAYERS,
+        "last_token": {str(l): last_results[l] for l in LAYERS if l in last_results},
+        "mean_token": {str(l): mean_results[l] for l in LAYERS if l in mean_results},
+    }
+    results_json = out_dir / "probe_results.json"
+    with results_json.open("w") as f:
+        json.dump(results_payload, f, indent=2)
+    print(f"Results saved: {results_json}")
+
     print("\nDone.")
 
 
