@@ -625,21 +625,24 @@ def fig_vuln_secure_by_layer(layers_data):
         layer = int(layer_str)
 
         if run_name not in run_results:
-            run_results[run_name] = {"layers": [], "global": [], "c_only": []}
+            run_results[run_name] = {"layers": [], "global": [], "c_only": [], "php_only": [], "js_only": []}
 
         global_res = probe_vuln_secure(safe_mat, vuln_mat, meta, ext=None)
         c_res      = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="c")
+        php_res    = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="php")
+        js_res     = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="js")
 
         run_results[run_name]["layers"].append(layer)
         run_results[run_name]["global"].append(global_res)
         run_results[run_name]["c_only"].append(c_res)
+        run_results[run_name]["php_only"].append(php_res)
+        run_results[run_name]["js_only"].append(js_res)
 
     # Sort by layer
     for rn in run_results:
         order = np.argsort(run_results[rn]["layers"])
-        run_results[rn]["layers"]  = [run_results[rn]["layers"][i]  for i in order]
-        run_results[rn]["global"]  = [run_results[rn]["global"][i]  for i in order]
-        run_results[rn]["c_only"]  = [run_results[rn]["c_only"][i]  for i in order]
+        for key in ("layers", "global", "c_only", "php_only", "js_only"):
+            run_results[rn][key] = [run_results[rn][key][i] for i in order]
 
     n_runs = len(run_results)
     if n_runs == 0:
@@ -662,8 +665,10 @@ def fig_vuln_secure_by_layer(layers_data):
             ax.plot(xs, aucs, marker + "-", color=color, label=label, lw=1.5, ms=5)
             ax.fill_between(xs, los, his, color=color, alpha=0.15)
 
-        _plot_line(rd["global"], "#333333", "All files",    "o")
-        _plot_line(rd["c_only"], "#4878cf", "Within C only", "^")
+        _plot_line(rd["global"],   "#333333", "All files",      "o")
+        _plot_line(rd["c_only"],   "#4878cf", "Within C",       "^")
+        _plot_line(rd["php_only"], "#d62728", "Within PHP",     "s")
+        _plot_line(rd["js_only"],  "#2ca02c", "Within JS",      "D")
 
         ax.axhline(0.5, color="grey", lw=0.7, ls=":", alpha=0.5, label="Chance")
         if 11 in layers:
@@ -680,7 +685,7 @@ def fig_vuln_secure_by_layer(layers_data):
         ax.legend(fontsize=7)
 
     fig.suptitle(
-        "Vulnerable vs. Secure probe: global and within-C\n"
+        "Vulnerable vs. Secure probe: global, within-C, within-PHP, within-JS\n"
         "(shaded band = 95% bootstrap CI)",
         fontsize=9,
     )
@@ -691,15 +696,15 @@ def fig_vuln_secure_by_layer(layers_data):
     print(f"Saved: {out}")
 
     # Print numerical summary
-    print("\nVuln vs. Secure AUROC (global / within-C) with 95% CI:")
-    header = f"{'Run':<20} {'Layer':>5}  {'Global AUC':>10}  {'95% CI':>15}  {'C-only AUC':>10}  {'95% CI':>15}"
-    print(header)
-    print("-" * len(header))
+    print("\nVuln vs. Secure AUROC (global / within-C / within-PHP / within-JS) with 95% CI:")
     for run_name, rd in run_results.items():
-        for layer, g, c in zip(rd["layers"], rd["global"], rd["c_only"]):
-            g_str = f"{g['roc_auc']:.3f} [{g['ci_lo']:.3f}-{g['ci_hi']:.3f}]" if g else "    —"
-            c_str = f"{c['roc_auc']:.3f} [{c['ci_lo']:.3f}-{c['ci_hi']:.3f}]" if c else "    —"
-            print(f"{run_name:<20} {layer:>5}  {g_str:>26}  {c_str:>26}")
+        print(f"\n{run_name}")
+        print(f"  {'Layer':>5}  {'Global':>24}  {'C-only':>24}  {'PHP-only':>24}  {'JS-only':>24}")
+        print("  " + "-" * 105)
+        def _fmt(r):
+            return f"{r['roc_auc']:.3f} [{r['ci_lo']:.3f}-{r['ci_hi']:.3f}]" if r else "       —      "
+        for layer, g, c, p, j in zip(rd["layers"], rd["global"], rd["c_only"], rd["php_only"], rd["js_only"]):
+            print(f"  {layer:>5}  {_fmt(g):>24}  {_fmt(c):>24}  {_fmt(p):>24}  {_fmt(j):>24}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
