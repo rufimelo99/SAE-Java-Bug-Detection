@@ -23,6 +23,7 @@
 #     1b  position_stratified_probe.py  → positional_profiles_raw.jsonl
 #     1c  token_feature_viz.py          → fig_token_feature_1797.pdf + token_acts_*.jsonl
 #     1d  mean_pool_sae_probe.py        → mean_pool_sae/<ts>/*.pt + fig_mean_pool_sae_comparison.pdf
+#     1e  advanced_pooling_probe.py     → advanced_pool/<ts>/*.pt + fig_advanced_pooling_comparison.pdf
 #
 #   PHASE 2 (no GPU — depends on pre-computed .pt files)
 #     2a  layer_cwe_ablation.ipynb      → main probe AUROCs, CWE family probe, residualisation
@@ -156,6 +157,14 @@ if [ "$RUN_GPU" = true ]; then
     # Runtime: ~45 min on A100
     run_step "1d_mean_pool_sae_probe" \
         $CONDA python "$NOTEBOOKS/mean_pool_sae_probe.py"
+
+    # ── 1e: Advanced pooling probe (attention-weighted + diff-restricted) ──────
+    # Paper: App. P (fig_advanced_pooling_comparison.pdf)
+    # Output: artifacts/activations/advanced_pool/<ts>/*.pt
+    #         paper figures/fig_advanced_pooling_comparison.pdf
+    # Runtime: ~90 min on A100 (attention extraction doubles memory per sample)
+    run_step "1e_advanced_pooling_probe" \
+        $CONDA python "$NOTEBOOKS/advanced_pooling_probe.py"
 
 fi  # END PHASE 1
 
