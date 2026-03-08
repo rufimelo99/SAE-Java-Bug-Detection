@@ -95,8 +95,10 @@ def load_source_records(jsonl_path: Path, n_sample: int = -1):
                 secure_code  = base64.b64decode(r["secure_code"]).decode("utf-8", errors="replace")
                 vuln_code    = base64.b64decode(r["vulnerable_code"]).decode("utf-8", errors="replace")
             except Exception:
-                secure_code  = r.get("secure_code", "")
-                vuln_code    = r.get("vulnerable_code", "")
+                # r.get(..., "") only uses default for missing keys, not for JSON null values;
+                # "or ''" handles null (None) values correctly.
+                secure_code  = r.get("secure_code") or ""
+                vuln_code    = r.get("vulnerable_code") or ""
             records.append({
                 "vuln_id":        r["vuln_id"],
                 "cwe":            r["cwe"],
@@ -201,6 +203,10 @@ def extract_pooled_vectors(
         "diff_n_changed_lines": (int, int),
       }
     """
+    # Guard against null/empty code strings (JSON null records in dataset)
+    secure_code = secure_code or ""
+    vuln_code   = vuln_code   or ""
+
     # ── Diff masks ────────────────────────────────────────────────────────────
     s_changed, v_changed = get_changed_line_sets(secure_code, vuln_code) if do_diff else (set(), set())
 
@@ -229,10 +235,12 @@ def extract_pooled_vectors(
             max_length=max_tokens,
             return_offsets_mapping=True,
         )
-        offset_mapping = encoding.pop("offset_mapping")[0]   # [seq_len, 2], keep on CPU
+        # offset_mapping may be absent or None if the slow tokenizer is used
+        _om = encoding.pop("offset_mapping", None)
+        offset_mapping = _om[0] if _om is not None else None   # [seq_len, 2] or None
 
         # Diff mask
-        if do_diff and changed_lines:
+        if do_diff and changed_lines and offset_mapping is not None:
             diff_mask = build_token_diff_mask(code, changed_lines, offset_mapping)
             # Record fraction
             if side_name == "secure":
@@ -261,12 +269,23 @@ def extract_pooled_vectors(
 
             # ── Attention-weighted pooling ───────────────────────────────────
             if do_attn:
-                # attentions[layer_idx]: [1, n_heads, seq_len, seq_len]
-                attn = outputs.attentions[layer_idx][0]         # [n_heads, seq_len, seq_len]
-                last_attn = attn[:, -1, :].float()              # [n_heads, seq_len]
-                weights   = last_attn.mean(dim=0)               # [seq_len]
-                weights   = weights / (weights.sum() + 1e-8)    # normalise
-                attn_vec  = (h * weights.unsqueeze(-1)).sum(dim=0).cpu().numpy()
+                # outputs.attentions may be None (Flash Attention 2 / SDPA on CUDA
+                # does not return attention weights).  In that case fall back to mean-token.
+                attn_layer = (
+                    outputs.attentions[layer_idx]
+                    if outputs.attentions is not None
+                    else None
+                )
+                if attn_layer is not None:
+                    # attentions[layer_idx]: [1, n_heads, seq_len, seq_len]
+                    attn      = attn_layer[0]                    # [n_heads, seq_len, seq_len]
+                    last_attn = attn[:, -1, :].float()          # [n_heads, seq_len]
+                    weights   = last_attn.mean(dim=0)           # [seq_len]
+                    weights   = weights / (weights.sum() + 1e-8)
+                    attn_vec  = (h * weights.unsqueeze(-1)).sum(dim=0).cpu().numpy()
+                else:
+                    # Flash/SDPA backend — attention weights unavailable; use mean-token
+                    attn_vec = mean_vec
                 result["attn"][side_name][layer_idx] = attn_vec
 
             # ── Diff-restricted pooling ──────────────────────────────────────
@@ -496,9 +515,18 @@ def main():
 
     print(f"\nLoading {MODEL_ID}...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model     = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=torch.float16
+
+    # Use eager attention when attention weights are needed (Flash Attention 2 and
+    # SDPA return None for attention tensors, so we force the eager backend when
+    # do_attn=True).  On MPS, "eager" is always used anyway.
+    attn_impl_kwargs = (
+        {"attn_implementation": "eager"} if do_attn and device == "cuda" else {}
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID, torch_dtype=torch.float16, **attn_impl_kwargs
     ).to(device)
+    if do_attn and device == "cuda":
+        print("  Using eager attention implementation (required for output_attentions=True)")
     model.eval()
     print("  Model ready.")
 
