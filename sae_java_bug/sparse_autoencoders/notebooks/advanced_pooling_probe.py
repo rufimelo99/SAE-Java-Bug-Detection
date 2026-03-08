@@ -278,9 +278,13 @@ def extract_pooled_vectors(
                 )
                 if attn_layer is not None:
                     # attentions[layer_idx]: [1, n_heads, seq_len, seq_len]
-                    attn      = attn_layer[0]                    # [n_heads, seq_len, seq_len]
-                    last_attn = attn[:, -1, :].float()          # [n_heads, seq_len]
+                    # Use float32 for attention weights to avoid fp16 overflow (NaN)
+                    attn      = attn_layer[0].float()           # [n_heads, seq_len, seq_len]
+                    last_attn = attn[:, -1, :]                  # [n_heads, seq_len]
                     weights   = last_attn.mean(dim=0)           # [seq_len]
+                    # Replace any NaN weights (degenerate sequences) with uniform
+                    if torch.isnan(weights).any():
+                        weights = torch.ones_like(weights)
                     weights   = weights / (weights.sum() + 1e-8)
                     attn_vec  = (h * weights.unsqueeze(-1)).sum(dim=0).cpu().numpy()
                 else:
@@ -331,6 +335,13 @@ def probe_vuln_secure(safe_mat, vuln_mat, n_components=50, cv=5, n_bootstrap=500
     n  = len(safe_mat)
     X  = np.vstack([safe_mat, vuln_mat]).astype(np.float32)
     y  = np.array([0] * n + [1] * n, dtype=int)
+
+    # Replace NaN/Inf that can arise from fp16 overflow or zero-filled fallback rows.
+    # np.nan_to_num converts NaN→0, +inf→large finite, -inf→large negative.
+    n_bad = int(np.sum(~np.isfinite(X)))
+    if n_bad > 0:
+        print(f"    [probe] replacing {n_bad} non-finite values (NaN/Inf) with 0")
+        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
     scaler = StandardScaler()
     pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
