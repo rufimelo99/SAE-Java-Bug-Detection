@@ -49,9 +49,9 @@ LAYERS = [0, 3, 7, 11, 15, 19, 23, 27]
 SEED   = 42
 
 LANGUAGES = {
-    "C":   [".c", ".cc", ".cpp", ".h"],
-    "PHP": [".php"],
-    "JS":  [".js", ".ts"],
+    "C":   ["c", "cc", "cpp", "h"],
+    "PHP": ["php"],
+    "JS":  ["js", "ts"],
 }
 
 LANG_COLORS = {
@@ -94,11 +94,19 @@ def load_meta(run_dir: Path) -> list[dict]:
         return json.load(f)
 
 
+def _tensor_to_numpy(t: "torch.Tensor") -> np.ndarray:
+    """Fast tensor → numpy via ctypes (avoids Python-level bytes() iteration)."""
+    import ctypes
+    t = t.float().contiguous()
+    buf = (ctypes.c_float * t.numel()).from_address(t.data_ptr())
+    return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+
+
 def load_layer(run_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
     safe_pt = run_dir / f"safe_layer_{layer}.pt"
     vuln_pt = run_dir / f"vulnerable_layer_{layer}.pt"
-    safe_mat = torch.load(safe_pt, weights_only=True).numpy().astype(np.float32)
-    vuln_mat = torch.load(vuln_pt, weights_only=True).numpy().astype(np.float32)
+    safe_mat = _tensor_to_numpy(torch.load(safe_pt, weights_only=True))
+    vuln_mat = _tensor_to_numpy(torch.load(vuln_pt, weights_only=True))
     return safe_mat, vuln_mat
 
 
