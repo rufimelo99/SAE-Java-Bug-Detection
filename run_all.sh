@@ -237,6 +237,19 @@ if [ "$RUN_NO_GPU" = true ]; then
         echo "  [2f] SKIPPED — positional_profiles_raw.jsonl not found (run phase 1b first)"
     fi
 
+    # ── 2g: Advanced pooling figures ───────────────────────────────────────────
+    # Paper: fig_advanced_pooling_comparison.pdf (App. P)
+    # Depends on: 1e checkpoint (probe_results.json in advanced_pool/<ts>/)
+    # No GPU — pure figure generation from saved JSON
+    ADVANCED_POOL_CHECK=$(ls "$ARTIFACTS/advanced_pool"/*/probe_results.json 2>/dev/null | tail -1)
+    if [ -n "$ADVANCED_POOL_CHECK" ]; then
+        run_step "2g_advanced_pooling_figure" \
+            $CONDA python "$NOTEBOOKS/generate_advanced_pooling_figure.py"
+    else
+        echo ""
+        echo "  [2g] SKIPPED — no advanced_pool/*/probe_results.json found (run phase 1e first)"
+    fi
+
 fi  # END PHASE 2
 
 

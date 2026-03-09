@@ -115,64 +115,68 @@ def load_source_records(jsonl_path: Path, n_sample: int = -1):
 # Diff utilities
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_changed_line_sets(secure_code: str, vuln_code: str):
+def get_changed_char_spans(secure_code: str, vuln_code: str):
     """
-    Returns (secure_changed_lines, vuln_changed_lines) — sets of 0-indexed
-    line numbers changed/added in each version relative to the other.
-    Uses SequenceMatcher on line lists (fast, handles moves well).
-    """
-    s_lines = secure_code.splitlines()
-    v_lines = vuln_code.splitlines()
+    Character-level diff: returns sorted lists of (start, end) character spans
+    that differ between the two versions.
+    The dataset stores code as flat strings (no newlines), so line-level diff
+    degenerates to a single "replace" block covering the entire file.
+    Character-level diff gives meaningful sparse masks.
 
-    sm = difflib.SequenceMatcher(None, v_lines, s_lines, autojunk=False)
-    secure_changed: set[int] = set()
-    vuln_changed:   set[int] = set()
+    Returns:
+        secure_spans: list of (start, end) char ranges that were inserted/changed
+                      in secure_code relative to vuln_code.
+        vuln_spans:   list of (start, end) char ranges that were deleted/changed
+                      in vuln_code relative to secure_code.
+    """
+    sm = difflib.SequenceMatcher(None, vuln_code, secure_code, autojunk=False)
+    secure_spans: list[tuple[int, int]] = []
+    vuln_spans:   list[tuple[int, int]] = []
 
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "insert":   # lines j1:j2 added in secure
-            secure_changed.update(range(j1, j2))
-        elif tag == "delete":  # lines i1:i2 removed from vuln
-            vuln_changed.update(range(i1, i2))
+        if tag == "insert":    # chars j1:j2 added in secure
+            if j2 > j1:
+                secure_spans.append((j1, j2))
+        elif tag == "delete":  # chars i1:i2 removed from vuln
+            if i2 > i1:
+                vuln_spans.append((i1, i2))
         elif tag == "replace":
-            secure_changed.update(range(j1, j2))
-            vuln_changed.update(range(i1, i2))
+            if j2 > j1:
+                secure_spans.append((j1, j2))
+            if i2 > i1:
+                vuln_spans.append((i1, i2))
         # "equal" — skip
 
-    return secure_changed, vuln_changed
+    return secure_spans, vuln_spans
 
 
 def build_token_diff_mask(
-    code: str,
-    changed_lines: set,
+    char_spans: list[tuple[int, int]],
     offset_mapping: torch.Tensor,
 ) -> torch.Tensor:
     """
-    Returns a bool tensor [seq_len] where True = token overlaps a changed line.
-    Uses character offsets (return_offsets_mapping=True) to map tokens → lines.
-    Falls back to all-True if offset_mapping is unavailable or all-zero.
+    Returns a bool tensor [seq_len] where True = token's start char falls
+    within one of the changed character spans.
+    Uses binary search for O(T log S) where T=tokens, S=spans.
     """
-    # Build cumulative char offsets per line
-    lines = code.split("\n")
-    line_starts: list[int] = []
-    pos = 0
-    for ln in lines:
-        line_starts.append(pos)
-        pos += len(ln) + 1   # +1 for the '\n'
-    line_starts.append(pos)  # sentinel
+    # Build sorted list of span starts and ends for binary search
+    span_starts = [s for s, e in char_spans]
+    span_ends   = [e for s, e in char_spans]
 
-    def char_to_line(char_idx: int) -> int:
-        idx = bisect.bisect_right(line_starts, char_idx) - 1
-        return max(0, min(idx, len(lines) - 1))
+    def in_any_span(char_idx: int) -> bool:
+        # Find rightmost span that starts at or before char_idx
+        idx = bisect.bisect_right(span_starts, char_idx) - 1
+        if idx < 0:
+            return False
+        return char_idx < span_ends[idx]
 
-    offsets = offset_mapping.tolist()  # list of (start, end) pairs
+    offsets = offset_mapping.tolist()
     mask = []
     for start, end in offsets:
-        # (0, 0) marks special tokens — exclude them from diff mask (treat as unchanged)
-        if start == 0 and end == 0:
+        if start == 0 and end == 0:   # special token (BOS/EOS/PAD)
             mask.append(False)
         else:
-            line_num = char_to_line(start)
-            mask.append(line_num in changed_lines)
+            mask.append(in_any_span(start))
 
     return torch.tensor(mask, dtype=torch.bool)
 
@@ -200,21 +204,21 @@ def extract_pooled_vectors(
         "diff":  {"secure": {layer: np.array}, "vuln": {...}},   # if do_diff
         "diff_frac_secure": float,   # fraction of tokens in changed lines (secure)
         "diff_frac_vuln":   float,
-        "diff_n_changed_lines": (int, int),
+        "diff_n_changed_spans": (int, int),
       }
     """
     # Guard against null/empty code strings (JSON null records in dataset)
     secure_code = secure_code or ""
     vuln_code   = vuln_code   or ""
 
-    # ── Diff masks ────────────────────────────────────────────────────────────
-    s_changed, v_changed = get_changed_line_sets(secure_code, vuln_code) if do_diff else (set(), set())
+    # ── Diff masks (character-level; dataset stores code as flat strings) ────
+    s_spans, v_spans = get_changed_char_spans(secure_code, vuln_code) if do_diff else ([], [])
 
     result: dict = {
         "mean": {"secure": {}, "vuln": {}},
         "diff_frac_secure": 0.0,
         "diff_frac_vuln":   0.0,
-        "diff_n_changed_lines": (len(s_changed), len(v_changed)),
+        "diff_n_changed_spans": (len(s_spans), len(v_spans)),
     }
     if do_attn:
         result["attn"] = {"secure": {}, "vuln": {}}
@@ -222,11 +226,11 @@ def extract_pooled_vectors(
         result["diff"] = {"secure": {}, "vuln": {}}
 
     sides = [
-        ("secure", secure_code, s_changed),
-        ("vuln",   vuln_code,   v_changed),
+        ("secure", secure_code, s_spans),
+        ("vuln",   vuln_code,   v_spans),
     ]
 
-    for side_name, code, changed_lines in sides:
+    for side_name, code, char_spans in sides:
         # Tokenise with offset mapping for diff masking
         encoding = tokenizer(
             code,
@@ -239,14 +243,14 @@ def extract_pooled_vectors(
         _om = encoding.pop("offset_mapping", None)
         offset_mapping = _om[0] if _om is not None else None   # [seq_len, 2] or None
 
-        # Diff mask
-        if do_diff and changed_lines and offset_mapping is not None:
-            diff_mask = build_token_diff_mask(code, changed_lines, offset_mapping)
-            # Record fraction
+        # Diff mask — character-level spans → token boolean mask
+        if do_diff and char_spans and offset_mapping is not None:
+            diff_mask = build_token_diff_mask(char_spans, offset_mapping)
+            frac = diff_mask.float().mean().item()
             if side_name == "secure":
-                result["diff_frac_secure"] = diff_mask.float().mean().item()
+                result["diff_frac_secure"] = frac
             else:
-                result["diff_frac_vuln"] = diff_mask.float().mean().item()
+                result["diff_frac_vuln"] = frac
         else:
             diff_mask = None
 
@@ -601,7 +605,7 @@ def main():
 
         diff_fracs_s.append(r["diff_frac_secure"])
         diff_fracs_v.append(r["diff_frac_vuln"])
-        nc = r["diff_n_changed_lines"]
+        nc = r["diff_n_changed_spans"]
         n_changed_s.append(nc[0])
         n_changed_v.append(nc[1])
         meta_rows.append({k: rec[k] for k in ("vuln_id", "cwe", "file_extension")})
@@ -633,7 +637,7 @@ def main():
         print(f"    Vuln   : mean={np.mean(diff_fracs_v):.3f}  "
               f"median={np.median(diff_fracs_v):.3f}  "
               f"zero-diff={sum(1 for x in diff_fracs_v if x == 0)}/{N}")
-        print(f"  Changed lines: secure mean={np.mean(n_changed_s):.1f}, "
+        print(f"  Changed char-spans: secure mean={np.mean(n_changed_s):.1f}, "
               f"vuln mean={np.mean(n_changed_v):.1f}")
 
     # ── 5. Run probes ─────────────────────────────────────────────────────────
