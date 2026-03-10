@@ -1,9 +1,0 @@
-{
-    "model": "codellama/CodeLlama-7b-hf",
-    "release": "N/A",
-    "cached_component": "hook_resid_post.hook_sae_acts_post",
-    "layers_available": [
-        0
-    ],
-    "local_path_template": "../artifacts/sae_DeltaSecommits_codellama-7b-hf_tokenized_{sae_id}"
-}
