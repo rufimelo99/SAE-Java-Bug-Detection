@@ -206,17 +206,18 @@ def _draw_trajectories(ax, arrays_meta: list[tuple], pca, layer, N, title_suffix
         n = len(arr)
         if n == 0:
             continue
-        n_ind = min(40, n)
+        n_ind = min(15, n)
         idx   = rng.choice(n, size=n_ind, replace=False)
         for i in idx:
             ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2],
-                    color=color, alpha=0.05, lw=0.4, linestyle=ls)
+                    color=color, alpha=0.015, lw=0.3, linestyle=ls)
         mean = arr.mean(axis=0)
         ax.plot(mean[:, 0], mean[:, 1], mean[:, 2],
-                color=color, lw=2.5, linestyle=ls, label=f"{label} (n={n})")
+                color=color, lw=3.0, linestyle=ls, label=f"{label} (n={n})",
+                zorder=10)
         marker = "o" if ls == "-" else "s"   # circle=start solid, square=start dashed
-        ax.scatter(*mean[0],  s=60, c=color, marker=marker, zorder=5)
-        ax.scatter(*mean[-1], s=60, c=color, marker="^", zorder=5)
+        ax.scatter(*mean[0],  s=80, c=color, marker=marker, zorder=11, edgecolors="k", linewidths=0.5)
+        ax.scatter(*mean[-1], s=80, c=color, marker="^",    zorder=11, edgecolors="k", linewidths=0.5)
 
     ev = pca.explained_variance_ratio_ * 100
     ax.set_xlabel(f"PC1 ({ev[0]:.1f}%)", fontsize=7)
@@ -259,7 +260,7 @@ def save_plotly_vuln_secure(layer, sec_pca, vul_pca, pca, N):
 
     pos_vals = np.linspace(0, 1, BINS)
     rng      = np.random.default_rng(42)
-    idx_ind  = rng.choice(N, size=min(40, N), replace=False)
+    idx_ind  = rng.choice(N, size=min(15, N), replace=False)
 
     fig_pl = go.Figure()
     for i in idx_ind:
@@ -267,7 +268,7 @@ def save_plotly_vuln_secure(layer, sec_pca, vul_pca, pca, N):
             fig_pl.add_trace(go.Scatter3d(
                 x=arr[i, :, 0], y=arr[i, :, 1], z=arr[i, :, 2],
                 mode="lines", line=dict(color=col, width=1),
-                opacity=0.1, showlegend=False,
+                opacity=0.03, showlegend=False,
             ))
 
     for arr, name, cs, show_cb in [
@@ -326,12 +327,12 @@ def save_plotly_cwe_family(layer, sec_pca, vul_pca, families, pca):
         ]:
             n = len(arr)
             # faint individuals
-            idx_ind = rng.choice(n, size=min(15, n), replace=False)
+            idx_ind = rng.choice(n, size=min(10, n), replace=False)
             for i in idx_ind:
                 fig_pl.add_trace(go.Scatter3d(
                     x=arr[i, :, 0], y=arr[i, :, 1], z=arr[i, :, 2],
                     mode="lines", line=dict(color=color, width=1, dash=dash),
-                    opacity=0.08, showlegend=False,
+                    opacity=0.03, showlegend=False,
                 ))
             # centroid
             mean = arr.mean(0)
