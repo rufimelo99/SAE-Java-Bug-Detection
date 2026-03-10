@@ -115,8 +115,8 @@ with open(out_path, "a") as fout:
             continue
 
         vuln_id = rec.get("vuln_id") or rec.get("id") or str(i)
-        secure_code     = rec.get("secure_code",     rec.get("fixed",    ""))
-        vulnerable_code = rec.get("vulnerable_code", rec.get("vulnerable", ""))
+        secure_code     = rec.get("prior_version",   rec.get("secure_code",     rec.get("fixed",    "")))
+        vulnerable_code = rec.get("after_version",   rec.get("vulnerable_code", rec.get("vulnerable", "")))
         cwe             = rec.get("cwe", "")
         ext             = rec.get("file_extension", "")
 
