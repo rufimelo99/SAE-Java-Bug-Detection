@@ -196,13 +196,13 @@ def fit_pca_and_project(sec_arr, vul_arr):
 
 
 # ── Drawing helpers ────────────────────────────────────────────────────────────
-def _draw_trajectories(ax, arrays_colors: list[tuple], pca, layer, N, title_suffix=""):
+def _draw_trajectories(ax, arrays_meta: list[tuple], pca, layer, N, title_suffix=""):
     """
-    arrays_colors: list of (arr [N_i, BINS, 3], label, color)
+    arrays_meta: list of (arr [N_i, BINS, 3], label, color, linestyle)
     Draws faint individual paths + bold centroid for each group.
     """
     rng = np.random.default_rng(42)
-    for arr, label, color in arrays_colors:
+    for arr, label, color, ls in arrays_meta:
         n = len(arr)
         if n == 0:
             continue
@@ -210,11 +210,12 @@ def _draw_trajectories(ax, arrays_colors: list[tuple], pca, layer, N, title_suff
         idx   = rng.choice(n, size=n_ind, replace=False)
         for i in idx:
             ax.plot(arr[i, :, 0], arr[i, :, 1], arr[i, :, 2],
-                    color=color, alpha=0.05, lw=0.4)
+                    color=color, alpha=0.05, lw=0.4, linestyle=ls)
         mean = arr.mean(axis=0)
         ax.plot(mean[:, 0], mean[:, 1], mean[:, 2],
-                color=color, lw=2.5, label=f"{label} (n={n})")
-        ax.scatter(*mean[0],  s=60, c=color, marker="o", zorder=5)
+                color=color, lw=2.5, linestyle=ls, label=f"{label} (n={n})")
+        marker = "o" if ls == "-" else "s"   # circle=start solid, square=start dashed
+        ax.scatter(*mean[0],  s=60, c=color, marker=marker, zorder=5)
         ax.scatter(*mean[-1], s=60, c=color, marker="^", zorder=5)
 
     ev = pca.explained_variance_ratio_ * 100
@@ -227,18 +228,24 @@ def _draw_trajectories(ax, arrays_colors: list[tuple], pca, layer, N, title_suff
 
 def draw_vuln_secure(ax, sec_pca, vul_pca, pca, layer, N):
     _draw_trajectories(ax, [
-        (sec_pca, "Secure",     "#1f77b4"),
-        (vul_pca, "Vulnerable", "#d62728"),
+        (sec_pca, "Secure",     "#1f77b4", "-"),
+        (vul_pca, "Vulnerable", "#d62728", "-"),
     ], pca, layer, N)
 
 
-def draw_cwe_family(ax, vul_pca, families, pca, layer):
+def draw_cwe_family(ax, sec_pca, vul_pca, families, pca, layer):
+    """
+    For each CWE family: solid line = vulnerable, dashed line = secure.
+    Same colour per family so the vuln/secure gap is visible within each family.
+    """
     groups = []
     for family, color in FAMILY_COLORS.items():
         mask = families == family
-        if mask.sum() == 0:
+        n = mask.sum()
+        if n == 0:
             continue
-        groups.append((vul_pca[mask], family, color))
+        groups.append((vul_pca[mask], f"{family} vuln", color, "-"))
+        groups.append((sec_pca[mask], f"{family} secure", color, "--"))
     _draw_trajectories(ax, groups, pca, layer, len(vul_pca), title_suffix=" — CWE family")
 
 
@@ -292,7 +299,7 @@ def save_plotly_vuln_secure(layer, sec_pca, vul_pca, pca, N):
     print(f"  Saved {out_html}")
 
 
-def save_plotly_cwe_family(layer, vul_pca, families, pca):
+def save_plotly_cwe_family(layer, sec_pca, vul_pca, families, pca):
     try:
         import plotly.graph_objects as go
     except ImportError:
@@ -311,26 +318,30 @@ def save_plotly_cwe_family(layer, vul_pca, families, pca):
     fig_pl = go.Figure()
     for family, color in PLOTLY_COLORS.items():
         mask = families == family
-        arr  = vul_pca[mask]
-        if len(arr) == 0:
+        if mask.sum() == 0:
             continue
-        # faint individuals
-        idx_ind = rng.choice(len(arr), size=min(20, len(arr)), replace=False)
-        for i in idx_ind:
+        for arr, suffix, dash in [
+            (vul_pca[mask], "vuln",   "solid"),
+            (sec_pca[mask], "secure", "dash"),
+        ]:
+            n = len(arr)
+            # faint individuals
+            idx_ind = rng.choice(n, size=min(15, n), replace=False)
+            for i in idx_ind:
+                fig_pl.add_trace(go.Scatter3d(
+                    x=arr[i, :, 0], y=arr[i, :, 1], z=arr[i, :, 2],
+                    mode="lines", line=dict(color=color, width=1, dash=dash),
+                    opacity=0.08, showlegend=False,
+                ))
+            # centroid
+            mean = arr.mean(0)
             fig_pl.add_trace(go.Scatter3d(
-                x=arr[i, :, 0], y=arr[i, :, 1], z=arr[i, :, 2],
-                mode="lines", line=dict(color=color, width=1),
-                opacity=0.1, showlegend=False,
+                x=mean[:, 0], y=mean[:, 1], z=mean[:, 2],
+                mode="lines+markers", name=f"{family} {suffix} (n={n})",
+                line=dict(color=color, width=6, dash=dash),
+                marker=dict(size=4, color=pos_vals,
+                            colorscale="Viridis", showscale=False),
             ))
-        # centroid
-        mean = arr.mean(0)
-        fig_pl.add_trace(go.Scatter3d(
-            x=mean[:, 0], y=mean[:, 1], z=mean[:, 2],
-            mode="lines+markers", name=f"{family} (n={mask.sum()})",
-            line=dict(color=color, width=6),
-            marker=dict(size=4, color=pos_vals,
-                        colorscale="Viridis", showscale=False),
-        ))
 
     ev = pca.explained_variance_ratio_ * 100
     fig_pl.update_layout(
@@ -379,11 +390,11 @@ for layer in args.layers:
         ax1 = fig.add_subplot(121, projection="3d")
         ax2 = fig.add_subplot(122, projection="3d")
         draw_vuln_secure(ax1, sec_pca, vul_pca, pca, layer, N)
-        draw_cwe_family(ax2, vul_pca, families, pca, layer)
+        draw_cwe_family(ax2, sec_pca, vul_pca, families, pca, layer)
     elif args.mode == "cwe_family":
         fig = plt.figure(figsize=(9, 7))
         ax  = fig.add_subplot(111, projection="3d")
-        draw_cwe_family(ax, vul_pca, families, pca, layer)
+        draw_cwe_family(ax, sec_pca, vul_pca, families, pca, layer)
     else:  # vuln_secure
         fig = plt.figure(figsize=(9, 7))
         ax  = fig.add_subplot(111, projection="3d")
@@ -406,7 +417,7 @@ for layer in args.layers:
         if args.mode in ("vuln_secure", "both"):
             save_plotly_vuln_secure(layer, sec_pca, vul_pca, pca, N)
         if args.mode in ("cwe_family", "both"):
-            save_plotly_cwe_family(layer, vul_pca, families, pca)
+            save_plotly_cwe_family(layer, sec_pca, vul_pca, families, pca)
 
 
 # ── Multi-layer grid (only if >1 layer loaded successfully) ───────────────────
@@ -425,11 +436,11 @@ if len(done_layers) > 1:
             ax1 = fig.add_subplot(nrows, ncols, panel,     projection="3d")
             ax2 = fig.add_subplot(nrows, ncols, panel + 1, projection="3d")
             draw_vuln_secure(ax1, sec_pca, vul_pca, pca, layer, N)
-            draw_cwe_family(ax2, vul_pca, families, pca, layer)
+            draw_cwe_family(ax2, sec_pca, vul_pca, families, pca, layer)
             panel += 2
         elif args.mode == "cwe_family":
             ax = fig.add_subplot(nrows, ncols, panel, projection="3d")
-            draw_cwe_family(ax, vul_pca, families, pca, layer)
+            draw_cwe_family(ax, sec_pca, vul_pca, families, pca, layer)
             panel += 1
         else:
             ax = fig.add_subplot(nrows, ncols, panel, projection="3d")
