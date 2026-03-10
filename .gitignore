@@ -199,3 +199,4 @@ cython_debug/
 *.pkl
 *DS_Store
 /.claude
+/sae_java_bug/artifacts/activations/token_pca_3d
