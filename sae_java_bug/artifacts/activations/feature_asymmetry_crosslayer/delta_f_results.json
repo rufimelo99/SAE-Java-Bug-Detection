@@ -1,0 +1,23 @@
+{
+  "0": {
+    "d_sae": 16384,
+    "secure_enriched": 176,
+    "vuln_enriched": 363,
+    "equal": 15845,
+    "ratio": 0.48
+  },
+  "11": {
+    "d_sae": 16384,
+    "secure_enriched": 12588,
+    "vuln_enriched": 3445,
+    "equal": 351,
+    "ratio": 3.65
+  },
+  "27": {
+    "d_sae": 16384,
+    "secure_enriched": 284,
+    "vuln_enriched": 303,
+    "equal": 15797,
+    "ratio": 0.94
+  }
+}

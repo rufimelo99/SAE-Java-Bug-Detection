@@ -477,13 +477,17 @@ def fig_within_c_pairwise(layers_data):
         if n == 0:
             continue
 
-        fig, axes = plt.subplots(1, n, figsize=(2.2 * n, 2.8))
-        if n == 1:
-            axes = [axes]
+        ncols = (n + 1) // 2  # 4 for 8 layers
+        nrows = 2
+        fig, axes2d = plt.subplots(nrows, ncols, figsize=(2.2 * ncols, 2.8 * nrows))
+        axes_flat = axes2d.flatten()
+        # hide any spare cells
+        for spare in axes_flat[n:]:
+            spare.axis("off")
 
         vmin, vmax = 0.5, 1.0
 
-        for ax, layer in zip(axes, sorted_layers):
+        for idx, (ax, layer) in enumerate(zip(axes_flat, sorted_layers)):
             delta, _s, _v, meta, _ = run_layers[layer]
             mask = meta["file_extension"].values == "c"
             if mask.sum() < 30:
@@ -515,7 +519,7 @@ def fig_within_c_pairwise(layers_data):
                 linewidths=0.4,
                 cbar=False,
                 square=True,
-                yticklabels=(layer == sorted_layers[0]),
+                yticklabels=(idx % ncols == 0),
             )
             # Grey diagonal
             for i in range(len(valid)):
@@ -527,7 +531,7 @@ def fig_within_c_pairwise(layers_data):
             ax.tick_params(axis="y", rotation=0,  labelsize=6)
 
         # Shared colorbar
-        cax = fig.add_axes([0.92, 0.15, 0.015, 0.65])
+        cax = fig.add_axes([0.92, 0.1, 0.015, 0.8])
         sm  = plt.cm.ScalarMappable(cmap="RdYlGn", norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
         cbar = plt.colorbar(sm, cax=cax)
@@ -537,7 +541,7 @@ def fig_within_c_pairwise(layers_data):
         fig.suptitle(
             f"{run_name}: Pairwise CWE-family AUC within C files only\n"
             "(no language confound — genuine vulnerability-type structure)",
-            fontsize=8, y=1.04,
+            fontsize=8, y=1.02,
         )
         fig.tight_layout(rect=[0, 0, 0.91, 1.0])
         safe_name = run_name.replace(" ", "_")

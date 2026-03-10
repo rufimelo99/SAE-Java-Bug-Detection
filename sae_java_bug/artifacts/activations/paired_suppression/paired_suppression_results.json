@@ -1,0 +1,15 @@
+{
+  "n_secure_enriched": 12588,
+  "n_vuln_enriched": 3445,
+  "ratio": 3.65,
+  "paired_suppression": {
+    "pct_pairs_total_safe_exceeds_vuln": 63.9,
+    "mean_pair_delta_activation": 38.9189,
+    "mean_normalised_share_secure": 0.5073,
+    "median_normalised_share_secure": 0.504
+  },
+  "magnitude_asymmetry": {
+    "pct_sec_enriched_above_diagonal": 95.1,
+    "pct_vuln_enriched_above_diagonal": 52.4
+  }
+}
