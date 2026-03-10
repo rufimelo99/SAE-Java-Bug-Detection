@@ -6,7 +6,7 @@
 set -euo pipefail
 
 LAYERS=(0 3 7 11 15 19 23 27)
-OUT_BASE="artifacts/activations"
+OUT_BASE="$(dirname "$0")/../sae_java_bug/artifacts/activations/per_token"
 SCRIPT="$(dirname "$0")/../sae_java_bug/sparse_autoencoders/notebooks/collect_per_token_sae.py"
 
 # Release that covers all 8 standard layers (0,3,7,11,15,19,23,27).

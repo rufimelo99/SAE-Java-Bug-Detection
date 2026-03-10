@@ -55,8 +55,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--layers", type=int, nargs="+", default=[11],
                     help="Which SAE layers to visualise (space-separated)")
 parser.add_argument("--jsonl_pattern",
-                    default="artifacts/activations/per_token_sae_l{layer}.jsonl",
-                    help="Path pattern; {layer} is replaced with the layer number")
+                    default="per_token/per_token_sae_l{layer}.jsonl",
+                    help="Path pattern inside artifacts/activations/; {layer} is replaced")
 parser.add_argument("--n_bins",     type=int, default=20,
                     help="Positional bins (relative position 0→1)")
 parser.add_argument("--n_samples",  type=int, default=0,
@@ -81,7 +81,7 @@ BINS = args.n_bins
 def resolve_jsonl(layer: int) -> Path:
     raw = args.jsonl_pattern.format(layer=layer)
     p   = Path(raw)
-    return p if p.is_absolute() else SCRIPT_DIR.parent.parent / p
+    return p if p.is_absolute() else ARTIFACTS / p
 
 
 def sparse_to_dense(tok: dict) -> np.ndarray:
@@ -130,6 +130,13 @@ def load_layer(layer: int):
                 print(f"    {n_loaded} samples …")
 
     print(f"  Loaded {n_loaded} samples.")
+    if n_loaded == 0:
+        raise RuntimeError(
+            f"No samples passed the min_tokens={args.min_tokens} filter for layer {layer}.\n"
+            f"  File: {path}\n"
+            "  If all records have n_tokens=1 this file contains pooled (not per-token) "
+            "activations — run collect_per_token_sae.sh on the VM to generate real per-token data."
+        )
     sec_arr = np.stack(sec_binned, axis=0)   # [N, BINS, D]
     vul_arr = np.stack(vul_binned, axis=0)
     return sec_arr, vul_arr
