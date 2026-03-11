@@ -238,7 +238,8 @@ def main():
     print(f"  Using {len(records)} pairs (shuffled from {len(all_records)} total)")
 
     print("  Loading vulnerability directions...")
-    directions = load_vuln_directions(STEER_LAYERS)
+    all_layers = sorted(set(STEER_LAYERS + [MEAS_LAYER]))
+    directions = load_vuln_directions(all_layers)
     # Direction at the measurement layer is used for projection AUROC
     meas_direction = directions[MEAS_LAYER]
 
