@@ -65,8 +65,8 @@ SOURCE_JSONL = (
 )
 
 MODEL_ID      = "Qwen/Qwen2.5-7B-Instruct"
-STEER_LAYERS  = [3, 7, 11, 15, 19, 23]   # layers to steer simultaneously
-MEAS_LAYER    = 15                         # mean-token extracted here
+STEER_LAYERS  = [0, 3, 7, 11, 15, 19, 23, 27]   # all 8 sampled layers
+MEAS_LAYER    = 27                               # mean-token extracted here (final sampled layer)
 MAX_TOKENS    = 512
 SEED          = 42
 ALPHAS        = [0, 5, 10, 20, 40]        # 0 = unsteered baseline
@@ -227,9 +227,15 @@ def main():
                         help="Number of pairs to process (default 200)")
     args = parser.parse_args()
 
-    print(f"Loading {args.n_samples} samples...")
-    records = load_samples(SOURCE_JSONL, n_samples=args.n_samples)
-    print(f"  Loaded {len(records)} pairs")
+    print(f"Loading samples (stratified by file extension)...")
+    # Load all records then stratify — the first N records in the JSONL skew
+    # heavily toward CWE-79/PHP/JS where mean-token AUROC is below chance,
+    # which would make the alpha=0 baseline unrepresentative.
+    all_records = load_samples(SOURCE_JSONL, n_samples=None)
+    rng = np.random.default_rng(SEED)
+    rng.shuffle(all_records)
+    records = all_records[:args.n_samples]
+    print(f"  Using {len(records)} pairs (shuffled from {len(all_records)} total)")
 
     print("  Loading vulnerability directions...")
     directions = load_vuln_directions(STEER_LAYERS)

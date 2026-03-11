@@ -70,8 +70,8 @@ SOURCE_JSONL = (
 )
 
 MODEL_ID          = "Qwen/Qwen2.5-7B-Instruct"
-PATCH_LAYERS      = [3, 7, 11, 15]
-MEASUREMENT_LAYER = 15          # downstream layer at which we read mean-token
+PATCH_LAYERS      = [0, 3, 7, 11, 15, 19, 23, 27]  # all 8 sampled layers
+MEASUREMENT_LAYER = 27          # must be >= all patch layers; use final sampled layer
 MAX_TOKENS        = 512         # shorter for tractable per-pair inference
 SEED              = 42
 POSITION_SUBSETS  = ["all", "body", "last_only"]
@@ -185,19 +185,39 @@ def make_patch_hook(secure_act: torch.Tensor, subset: str):
 # ── Single-pair patching ───────────────────────────────────────────────────────
 
 @torch.no_grad()
+def cache_all_layers(inputs, model, layers: list[int]) -> dict[int, torch.Tensor]:
+    """One forward pass, returns {layer: hidden_state [1, T, d_model]} for all layers."""
+    store = {}
+    handles = [
+        model.model.layers[L].register_forward_hook(make_cache_hook(store, L))
+        for L in layers
+    ]
+    try:
+        model(**inputs, use_cache=False)
+    finally:
+        for h in handles:
+            h.remove()
+    return store
+
+
+@torch.no_grad()
 def patch_pair(
     vuln_text: str,
     secure_text: str,
     tokenizer,
     model,
     device: torch.device,
-    patch_layer: int,
+    patch_layers: list[int],
     measurement_layer: int,
     vuln_direction: torch.Tensor,
-) -> dict[str, float]:
+) -> dict[int, dict[str, float]]:
     """
-    Returns projection values (onto vuln_direction at measurement_layer)
-    for the baseline and each position subset.
+    For each patch_layer, returns projection values (onto vuln_direction at
+    measurement_layer) for the baseline and each position subset.
+
+    Optimised: secure activations and the baseline are each extracted in a
+    single forward pass; only the 3 patched variants per layer require extra passes.
+    Total passes per pair = 2 + len(patch_layers) * len(POSITION_SUBSETS).
     """
     def tokenize(text):
         return tokenizer(
@@ -209,49 +229,38 @@ def patch_pair(
     secure_inputs = tokenize(secure_text)
     d = vuln_direction.to(device)
 
-    def _mean_proj(cache, key):
-        h = cache[key]   # [1, T, d_model]
+    def _mean_proj(h):
+        # h : [1, T, d_model]
         return float((h[0].float().mean(0) * d).sum().cpu())
 
-    # 1. Cache secure activation at patch_layer
-    sec_cache = {}
-    h = model.model.layers[patch_layer].register_forward_hook(
-        make_cache_hook(sec_cache, "act")
-    )
-    try:
-        model(**secure_inputs, use_cache=False)
-    finally:
-        h.remove()
-    secure_act = sec_cache["act"]   # [1, T_s, d_model]
+    # 1. ONE pass through secure — cache all patch layers simultaneously
+    sec_cache = cache_all_layers(secure_inputs, model, patch_layers)
 
-    # 2. Baseline: run vulnerable, capture mean-token at measurement_layer
-    meas_cache = {}
-    h = model.model.layers[measurement_layer].register_forward_hook(
-        make_cache_hook(meas_cache, "baseline")
-    )
-    try:
-        model(**vuln_inputs, use_cache=False)
-    finally:
-        h.remove()
-    baseline_proj = _mean_proj(meas_cache, "baseline")
+    # 2. ONE baseline pass through vulnerable — cache measurement layer
+    base_cache = cache_all_layers(vuln_inputs, model, [measurement_layer])
+    baseline_proj = _mean_proj(base_cache[measurement_layer])
 
-    # 3. Patched runs for each position subset
-    results = {"baseline": baseline_proj}
-    for subset in POSITION_SUBSETS:
-        patch_cache = {}
-        h_patch = model.model.layers[patch_layer].register_forward_hook(
-            make_patch_hook(secure_act, subset)
-        )
-        h_meas = model.model.layers[measurement_layer].register_forward_hook(
-            make_cache_hook(patch_cache, "patched")
-        )
-        try:
-            model(**vuln_inputs, use_cache=False)
-        finally:
-            h_patch.remove()
-            h_meas.remove()
+    # 3. For each patch_layer × position_subset: one patched pass
+    results = {}
+    for patch_layer in patch_layers:
+        results[patch_layer] = {"baseline": baseline_proj}
+        secure_act = sec_cache[patch_layer]   # [1, T_s, d_model]
 
-        results[subset] = _mean_proj(patch_cache, "patched")
+        for subset in POSITION_SUBSETS:
+            patch_cache = {}
+            h_patch = model.model.layers[patch_layer].register_forward_hook(
+                make_patch_hook(secure_act, subset)
+            )
+            h_meas = model.model.layers[measurement_layer].register_forward_hook(
+                make_cache_hook(patch_cache, measurement_layer)
+            )
+            try:
+                model(**vuln_inputs, use_cache=False)
+            finally:
+                h_patch.remove()
+                h_meas.remove()
+
+            results[patch_layer][subset] = _mean_proj(patch_cache[measurement_layer])
 
     return results
 
@@ -264,9 +273,13 @@ def main():
                         help="Number of pairs to process (default 200)")
     args = parser.parse_args()
 
-    print(f"Loading {args.n_pairs} pairs...")
-    pairs = load_pairs(SOURCE_JSONL, n_pairs=args.n_pairs)
-    print(f"  Loaded {len(pairs)} pairs")
+    print(f"Loading pairs (stratified by file extension)...")
+    # Load all then shuffle — the first N records skew toward CWE-79/PHP/JS.
+    all_pairs = load_pairs(SOURCE_JSONL, n_pairs=None)
+    rng = np.random.default_rng(SEED)
+    rng.shuffle(all_pairs)
+    pairs = all_pairs[:args.n_pairs]
+    print(f"  Using {len(pairs)} pairs (shuffled from {len(all_pairs)} total)")
 
     print(f"  Loading vulnerability direction (L{MEASUREMENT_LAYER})...")
     vuln_direction = load_vuln_direction(MEASUREMENT_LAYER)
@@ -287,18 +300,18 @@ def main():
     for i, pair in enumerate(pairs):
         if i % 25 == 0:
             print(f"  Pair {i + 1}/{len(pairs)}")
-        for patch_layer in PATCH_LAYERS:
-            try:
-                res = patch_pair(
-                    pair["vuln"], pair["secure"],
-                    tokenizer, model, device,
-                    patch_layer, MEASUREMENT_LAYER,
-                    vuln_direction,
-                )
-                for key, val in res.items():
+        try:
+            res = patch_pair(
+                pair["vuln"], pair["secure"],
+                tokenizer, model, device,
+                PATCH_LAYERS, MEASUREMENT_LAYER,
+                vuln_direction,
+            )
+            for patch_layer, layer_res in res.items():
+                for key, val in layer_res.items():
                     raw[patch_layer][key].append(val)
-            except Exception as e:
-                print(f"    [WARN] pair {i} L{patch_layer}: {e}")
+        except Exception as e:
+            print(f"    [WARN] pair {i}: {e}")
 
     # Summarise: Δ = patched_proj − baseline_proj
     summary = {}
@@ -329,7 +342,8 @@ def main():
     colours = {"all": "#2166ac", "body": "#4dac26", "last_only": "#d01c8b"}
     labels  = {"all": "All positions", "body": "Body\n(non-final)", "last_only": "Last\nonly"}
 
-    fig, axes = plt.subplots(1, len(PATCH_LAYERS), figsize=(10, 3.5), sharey=True)
+    fig, axes = plt.subplots(2, 4, figsize=(12, 6), sharey=True)
+    axes = axes.flatten()
     for ax, L in zip(axes, PATCH_LAYERS):
         for j, subset in enumerate(POSITION_SUBSETS):
             r = summary.get(L, {}).get(subset)
