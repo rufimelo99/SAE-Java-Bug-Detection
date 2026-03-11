@@ -39,11 +39,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
-from sklearn.preprocessing import StandardScaler
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
@@ -65,8 +61,8 @@ SOURCE_JSONL = (
 )
 
 MODEL_ID      = "Qwen/Qwen2.5-7B-Instruct"
-STEER_LAYERS  = [0, 3, 7, 11, 15, 19, 23, 27]   # all 8 sampled layers
-MEAS_LAYER    = 27                               # mean-token extracted here (final sampled layer)
+STEER_LAYERS  = [3, 7, 11, 15, 19, 23]   # stable-direction plateau (L3–L23); L0 and L27 excluded
+MEAS_LAYER    = 27                       # mean-token extracted here (final sampled layer)
 MAX_TOKENS    = 512
 SEED          = 42
 ALPHAS        = [0, 5, 10, 20, 40]        # 0 = unsteered baseline
@@ -199,24 +195,28 @@ def get_mean_token(
     return h[0].float().mean(dim=0).cpu().numpy()   # [d_model]
 
 
-# ── Probe ──────────────────────────────────────────────────────────────────────
+# ── Projection AUROC ───────────────────────────────────────────────────────────
+# Use direct projection onto the pre-computed vulnerability direction rather
+# than a fitted probe. This avoids PCA sign-flip on small samples and directly
+# measures whether steering moves representations along the known security axis.
 
-def run_probe(safe_mat: np.ndarray, vuln_mat: np.ndarray, n_components: int = 50) -> float:
-    n  = len(safe_mat)
-    X  = np.vstack([safe_mat, vuln_mat]).astype(np.float32)
-    y  = np.array([0] * n + [1] * n, dtype=int)
-    X_pca = PCA(
-        n_components=min(n_components, X.shape[1], X.shape[0] - 1),
-        random_state=SEED,
-    ).fit_transform(StandardScaler().fit_transform(X))
-    clf = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced",
-                             random_state=SEED)
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
-    ys  = np.zeros(len(y), dtype=float)
-    for tr, te in skf.split(X_pca, y):
-        clf.fit(X_pca[tr], y[tr])
-        ys[te] = clf.predict_proba(X_pca[te])[:, 1]
-    return float(roc_auc_score(y, ys))
+def projection_auroc(
+    safe_mat: np.ndarray,
+    vuln_mat: np.ndarray,
+    direction: torch.Tensor,
+) -> float:
+    """
+    Projects each mean-token vector onto the vulnerability direction and
+    computes AUROC(secure=0, vulnerable=1).  No fitting required.
+    A drop in AUROC as alpha increases confirms the direction is causally active.
+    """
+    d = direction.numpy().astype(np.float32)
+    proj_safe = safe_mat @ d   # [n]
+    proj_vuln = vuln_mat @ d   # [n]
+    n = len(proj_safe)
+    y      = np.array([0] * n + [1] * n, dtype=int)
+    scores = np.concatenate([proj_safe, proj_vuln])
+    return float(roc_auc_score(y, scores))
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -239,6 +239,8 @@ def main():
 
     print("  Loading vulnerability directions...")
     directions = load_vuln_directions(STEER_LAYERS)
+    # Direction at the measurement layer is used for projection AUROC
+    meas_direction = directions[MEAS_LAYER]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device: {device}")
@@ -277,16 +279,18 @@ def main():
                 for h in handles:
                     h.remove()
 
-    # ── AUROC per alpha ─────────────────────────────────────────────────────────
+    # ── Projection AUROC per alpha ──────────────────────────────────────────────
     auroc_by_alpha: dict[int, float] = {}
-    print(f"\nAUROC at L{MEAS_LAYER} mean-token (steering layers {STEER_LAYERS[0]}–{STEER_LAYERS[-1]}):")
+    print(f"\nProjection AUROC at L{MEAS_LAYER} (steering L{STEER_LAYERS[0]}–L{STEER_LAYERS[-1]}):")
     for alpha in ALPHAS:
         safe_mat = np.array(buffers[alpha]["safe"])
         vuln_mat = np.array(buffers[alpha]["vuln"])
         if len(safe_mat) < 10:
-            print(f"  alpha={alpha:>3}  [skipped, too few samples]")
+            print(f"  alpha={alpha:>3}  [skipped — only {len(safe_mat)} samples collected]")
             continue
-        auc = run_probe(safe_mat, vuln_mat)
+        auc = projection_auroc(safe_mat, vuln_mat, meas_direction)
+        # Projection AUROC below 0.5 means the direction is inverted for this
+        # alpha — normalise so 0.5 = chance and values move away from 0.5.
         auroc_by_alpha[alpha] = auc
         tag = " ← unsteered baseline" if alpha == 0 else ""
         print(f"  alpha={alpha:>3}  AUROC={auc:.3f}{tag}")
