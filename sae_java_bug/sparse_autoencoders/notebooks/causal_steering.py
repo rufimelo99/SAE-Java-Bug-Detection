@@ -128,17 +128,40 @@ def load_vuln_directions(layers: list[int]) -> dict[int, torch.Tensor]:
     return directions
 
 
+# ── Hook utilities ─────────────────────────────────────────────────────────────
+
+def _hidden_from_output(output):
+    """
+    Extract the hidden-state tensor from a layer output regardless of whether
+    the layer returned a plain tensor or a (hidden_states, ...) tuple.
+    Newer transformers versions may return a raw tensor instead of a 1-tuple.
+    Returns tensor of shape [batch, seq, d_model].
+    """
+    if isinstance(output, torch.Tensor):
+        return output
+    return output[0]
+
+
+def _replace_hidden(output, new_hidden):
+    """Return output with the hidden-state component replaced by new_hidden."""
+    if isinstance(output, torch.Tensor):
+        return new_hidden
+    out = list(output)
+    out[0] = new_hidden
+    return tuple(out)
+
+
 # ── Steering hook ──────────────────────────────────────────────────────────────
 
 def make_steer_hook(direction: torch.Tensor, alpha: float):
     """
     Subtracts alpha * direction from every token position in the residual stream.
     Steering in the −d direction moves representations toward the secure class.
+    Handles both tuple and raw-tensor layer outputs.
     """
     def hook(module, inp, output):
-        out    = list(output)
-        out[0] = out[0] - alpha * direction.to(out[0].device)
-        return tuple(out)
+        h = _hidden_from_output(output)
+        return _replace_hidden(output, h - alpha * direction.to(h.device))
     return hook
 
 
@@ -151,7 +174,6 @@ def get_mean_token(
     model,
     device: torch.device,
     meas_layer: int,
-    steer_hooks: list | None = None,
 ) -> np.ndarray:
     """
     Runs text through the model (with any pre-registered hooks) and returns
@@ -163,13 +185,18 @@ def get_mean_token(
     ).to(device)
 
     store = {}
-    h_meas = model.model.layers[meas_layer].register_forward_hook(
-        lambda m, i, o: store.update({"h": o[0].detach()})
-    )
-    model(**inputs, use_cache=False)
-    h_meas.remove()
 
-    return store["h"][0].float().mean(0).cpu().numpy()   # [d_model]
+    def _capture(m, i, o):
+        store["h"] = _hidden_from_output(o).detach()  # [batch, seq, d_model]
+
+    h_meas = model.model.layers[meas_layer].register_forward_hook(_capture)
+    try:
+        model(**inputs, use_cache=False)
+    finally:
+        h_meas.remove()
+
+    h = store["h"]           # [1, T, d_model]
+    return h[0].float().mean(dim=0).cpu().numpy()   # [d_model]
 
 
 # ── Probe ──────────────────────────────────────────────────────────────────────

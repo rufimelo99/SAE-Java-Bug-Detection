@@ -126,11 +126,34 @@ def load_vuln_direction(layer: int) -> torch.Tensor:
     raise FileNotFoundError(f"No mean_pool tensors for layer {layer}")
 
 
+# ── Hook utilities ─────────────────────────────────────────────────────────────
+
+def _hidden_from_output(output):
+    """
+    Extract the hidden-state tensor from a layer output regardless of whether
+    the layer returned a plain tensor or a (hidden_states, ...) tuple.
+    Newer transformers versions may return a raw tensor instead of a 1-tuple.
+    Returns tensor of shape [batch, seq, d_model].
+    """
+    if isinstance(output, torch.Tensor):
+        return output
+    return output[0]
+
+
+def _replace_hidden(output, new_hidden):
+    """Return output with the hidden-state component replaced by new_hidden."""
+    if isinstance(output, torch.Tensor):
+        return new_hidden
+    out = list(output)
+    out[0] = new_hidden
+    return tuple(out)
+
+
 # ── Hook helpers ───────────────────────────────────────────────────────────────
 
 def make_cache_hook(store: dict, key: str):
     def hook(module, inp, output):
-        store[key] = output[0].detach().clone()   # [1, T, d_model]
+        store[key] = _hidden_from_output(output).detach().clone()  # [1, T, d_model]
     return hook
 
 
@@ -142,11 +165,10 @@ def make_patch_hook(secure_act: torch.Tensor, subset: str):
     subset     : 'all' | 'body' | 'last_only'
     """
     def hook(module, inp, output):
-        out    = list(output)
-        h      = out[0].clone()          # [1, T_v, d_model]
-        T_v    = h.shape[1]
-        T_s    = secure_act.shape[1]
-        src    = secure_act.to(h.device)
+        h   = _hidden_from_output(output).clone()   # [1, T_v, d_model]
+        T_v = h.shape[1]
+        T_s = secure_act.shape[1]
+        src = secure_act.to(h.device)
 
         if subset == "last_only":
             h[0, -1, :] = src[0, -1, :]
@@ -156,8 +178,7 @@ def make_patch_hook(secure_act: torch.Tensor, subset: str):
             if end > 0:
                 h[0, :end, :] = src[0, :end, :]
 
-        out[0] = h
-        return tuple(out)
+        return _replace_hidden(output, h)
     return hook
 
 
@@ -188,13 +209,19 @@ def patch_pair(
     secure_inputs = tokenize(secure_text)
     d = vuln_direction.to(device)
 
+    def _mean_proj(cache, key):
+        h = cache[key]   # [1, T, d_model]
+        return float((h[0].float().mean(0) * d).sum().cpu())
+
     # 1. Cache secure activation at patch_layer
     sec_cache = {}
     h = model.model.layers[patch_layer].register_forward_hook(
         make_cache_hook(sec_cache, "act")
     )
-    model(**secure_inputs, use_cache=False)
-    h.remove()
+    try:
+        model(**secure_inputs, use_cache=False)
+    finally:
+        h.remove()
     secure_act = sec_cache["act"]   # [1, T_s, d_model]
 
     # 2. Baseline: run vulnerable, capture mean-token at measurement_layer
@@ -202,11 +229,11 @@ def patch_pair(
     h = model.model.layers[measurement_layer].register_forward_hook(
         make_cache_hook(meas_cache, "baseline")
     )
-    model(**vuln_inputs, use_cache=False)
-    h.remove()
-    baseline_proj = float(
-        (meas_cache["baseline"][0].float().mean(0) * d).sum().cpu()
-    )
+    try:
+        model(**vuln_inputs, use_cache=False)
+    finally:
+        h.remove()
+    baseline_proj = _mean_proj(meas_cache, "baseline")
 
     # 3. Patched runs for each position subset
     results = {"baseline": baseline_proj}
@@ -218,14 +245,13 @@ def patch_pair(
         h_meas = model.model.layers[measurement_layer].register_forward_hook(
             make_cache_hook(patch_cache, "patched")
         )
-        model(**vuln_inputs, use_cache=False)
-        h_patch.remove()
-        h_meas.remove()
+        try:
+            model(**vuln_inputs, use_cache=False)
+        finally:
+            h_patch.remove()
+            h_meas.remove()
 
-        patched_proj = float(
-            (patch_cache["patched"][0].float().mean(0) * d).sum().cpu()
-        )
-        results[subset] = patched_proj
+        results[subset] = _mean_proj(patch_cache, "patched")
 
     return results
 
