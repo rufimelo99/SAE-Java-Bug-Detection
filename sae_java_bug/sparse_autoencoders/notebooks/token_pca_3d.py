@@ -153,9 +153,14 @@ def load_layer(layer: int):
 
     sec_binned, vul_binned, families = [], [], []
     n_loaded = 0
+    n_skipped = 0
     with open(path) as f:
         for line in f:
-            rec   = json.loads(line)
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                n_skipped += 1
+                continue
             n_sec = rec.get("n_secure_tokens",     len(rec["secure"]))
             n_vul = rec.get("n_vulnerable_tokens", len(rec["vulnerable"]))
             if n_sec < args.min_tokens or n_vul < args.min_tokens:
@@ -169,7 +174,7 @@ def load_layer(layer: int):
             if n_loaded % 200 == 0:
                 print(f"    {n_loaded} samples …")
 
-    print(f"  Loaded {n_loaded} samples.")
+    print(f"  Loaded {n_loaded} samples (skipped {n_skipped} malformed lines).")
     if n_loaded == 0:
         raise RuntimeError(
             f"No samples passed the min_tokens={args.min_tokens} filter for layer {layer}.\n"
