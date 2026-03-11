@@ -168,7 +168,7 @@ def make_patch_hook(secure_act: torch.Tensor, subset: str):
         h   = _hidden_from_output(output).clone()   # [1, T_v, d_model]
         T_v = h.shape[1]
         T_s = secure_act.shape[1]
-        src = secure_act.to(h.device)
+        src = secure_act.to(device=h.device, dtype=h.dtype)
 
         if subset == "last_only":
             h[0, -1, :] = src[0, -1, :]

@@ -157,7 +157,7 @@ def make_steer_hook(direction: torch.Tensor, alpha: float):
     """
     def hook(module, inp, output):
         h = _hidden_from_output(output)
-        return _replace_hidden(output, h - alpha * direction.to(h.device))
+        return _replace_hidden(output, h - alpha * direction.to(device=h.device, dtype=h.dtype))
     return hook
 
 
