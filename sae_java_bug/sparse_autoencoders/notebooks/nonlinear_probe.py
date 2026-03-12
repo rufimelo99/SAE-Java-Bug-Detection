@@ -76,7 +76,11 @@ RUNS_REGISTRY = [
     },
     {
         "run_dir": ARTIFACTS / "TO_UPLOAD",
-        "label":   "SAE features",
+        "label":   "SAE features (STD)",
+    },
+    {
+        "run_dir": ARTIFACTS / "TOPK",
+        "label":   "SAE features (TopK)",
     },
 ]
 
@@ -123,7 +127,10 @@ def _load_layer(run_dir, layer):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             secure_rows.append(r["secure"])
             vuln_rows.append(r["vulnerable"])
     return np.array(secure_rows, dtype=np.float32), np.array(vuln_rows, dtype=np.float32)
@@ -201,21 +208,23 @@ def _make_probes():
 
 
 def run_probe_cv(safe_mat, vuln_mat, probe_name, probe):
-    """5-fold CV on stacked [safe; vuln] with PCA(50). Returns (mean, lo, hi)."""
+    """5-fold CV on stacked [safe; vuln] with PCA(50). Returns (mean, lo, hi).
+    Scaler and PCA are fit inside each fold to avoid data leakage."""
     n = len(safe_mat)
     X = np.vstack([safe_mat, vuln_mat])
     y = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(N_PCA, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_red  = pca.fit_transform(scaler.fit_transform(X))
-
+    n_comp  = min(N_PCA, X.shape[1], X.shape[0] - 1)
     skf     = StratifiedKFold(n_splits=N_CV_FOLDS, shuffle=True, random_state=SEED)
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_red, y):
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=n_comp, random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
         p = _make_probes()[probe_name]   # fresh instance per fold
-        p.fit(X_red[train_idx], y[train_idx])
-        y_score[test_idx] = p.predict_proba(X_red[test_idx])[:, 1]
+        p.fit(X_tr, y[train_idx])
+        y_score[test_idx] = p.predict_proba(X_te)[:, 1]
 
     return _bootstrap_auc_ci(y, y_score)
 

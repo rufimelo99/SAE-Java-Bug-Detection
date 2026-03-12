@@ -49,6 +49,7 @@ from sklearn.preprocessing import StandardScaler
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import base64
+import ctypes as _ctypes
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 HERE       = Path(__file__).parent
@@ -280,17 +281,18 @@ def probe_vuln_secure(safe_mat, vuln_mat, n_components=50, cv=5, n_bootstrap=500
     X = np.vstack([safe_mat, vuln_mat]).astype(np.float32)
     y = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_pca  = pca.fit_transform(scaler.fit_transform(X))
-
-    clf    = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
-    skf    = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
+    n_comp  = min(n_components, X.shape[1], X.shape[0] - 1)
+    clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
+    skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
 
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_pca, y):
-        clf.fit(X_pca[train_idx], y[train_idx])
-        y_score[test_idx] = clf.predict_proba(X_pca[test_idx])[:, 1]
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=min(n_comp, len(train_idx) - 1), random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
+        clf.fit(X_tr, y[train_idx])
+        y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score, n_bootstrap=n_bootstrap)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": n}
@@ -300,6 +302,13 @@ def probe_vuln_secure(safe_mat, vuln_mat, n_components=50, cv=5, n_bootstrap=500
 # Load pre-computed baselines (conditions 1-3)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _t2np(path) -> np.ndarray:
+    """Load a .pt tensor to numpy via ctypes (avoids NumPy 2.x / PyTorch compat issue)."""
+    t = torch.load(path, weights_only=True, map_location="cpu").float().contiguous()
+    buf = (_ctypes.c_float * t.numel()).from_address(t.data_ptr())
+    return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+
+
 def load_last_token_sae() -> dict | None:
     """Load pre-computed last-token SAE activations at L11 and run probe."""
     safe_pt = LAST_SAE_DIR / "safe_layer_11.pt"
@@ -307,8 +316,8 @@ def load_last_token_sae() -> dict | None:
     if not (safe_pt.exists() and vuln_pt.exists()):
         print(f"  [SKIP] last-token SAE .pt not found at {LAST_SAE_DIR}")
         return None
-    safe_mat = torch.load(safe_pt, weights_only=True).numpy().astype(np.float32)
-    vuln_mat = torch.load(vuln_pt, weights_only=True).numpy().astype(np.float32)
+    safe_mat = _t2np(safe_pt)
+    vuln_mat = _t2np(vuln_pt)
     result   = probe_vuln_secure(safe_mat, vuln_mat)
     print(f"  Last-token SAE  L11: AUROC {result['roc_auc']:.3f} "
           f"[{result['ci_lo']:.3f}–{result['ci_hi']:.3f}]")
@@ -322,8 +331,8 @@ def load_last_token_raw() -> dict | None:
         safe_pt = run_dir / "safe_layer_11.pt"
         vuln_pt = run_dir / "vulnerable_layer_11.pt"
         if safe_pt.exists() and vuln_pt.exists():
-            safe_mat = torch.load(safe_pt, weights_only=True).numpy().astype(np.float32)
-            vuln_mat = torch.load(vuln_pt, weights_only=True).numpy().astype(np.float32)
+            safe_mat = _t2np(safe_pt)
+            vuln_mat = _t2np(vuln_pt)
             result   = probe_vuln_secure(safe_mat, vuln_mat)
             print(f"  Last-token raw  L11: AUROC {result['roc_auc']:.3f} "
                   f"[{result['ci_lo']:.3f}–{result['ci_hi']:.3f}]")
@@ -363,8 +372,8 @@ def load_mean_token_raw() -> dict | None:
         safe_pt = run_dir / "safe_layer_11.pt"
         vuln_pt = run_dir / "vulnerable_layer_11.pt"
         if safe_pt.exists() and vuln_pt.exists():
-            safe_mat = torch.load(safe_pt, weights_only=True).numpy().astype(np.float32)
-            vuln_mat = torch.load(vuln_pt, weights_only=True).numpy().astype(np.float32)
+            safe_mat = _t2np(safe_pt)
+            vuln_mat = _t2np(vuln_pt)
             result   = probe_vuln_secure(safe_mat, vuln_mat)
             print(f"  Mean-token raw  L11: AUROC {result['roc_auc']:.3f} "
                   f"[{result['ci_lo']:.3f}–{result['ci_hi']:.3f}]  (run: {run_dir.name})")
@@ -469,7 +478,85 @@ def main():
         "--checkpoint_dir", default=None,
         help="Path to an existing out_dir to resume from, or 'auto' to find most recent."
     )
+    parser.add_argument(
+        "--probe_only", action="store_true",
+        help="Skip model inference; load latest cached mean_pool_sae .pt tensors and re-run probe only."
+    )
     args = parser.parse_args()
+
+    if args.probe_only:
+        # ── Probe-only mode ───────────────────────────────────────────────────
+        root = ARTIFACTS / "mean_pool_sae"
+        run_dirs = sorted(
+            (d for d in root.iterdir()
+             if (d / f"safe_mean_sae_layer_{SAE_LAYER}.pt").exists()),
+            reverse=True,
+        )
+        if not run_dirs:
+            raise FileNotFoundError(f"No completed mean_pool_sae runs found under {root}")
+        run_dir = run_dirs[0]
+        print(f"[probe-only] Loading from {run_dir}")
+
+        def _load(name):
+            import ctypes
+            t = torch.load(run_dir / name, weights_only=True).float().contiguous()
+            buf = (ctypes.c_float * t.numel()).from_address(t.data_ptr())
+            return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+
+        safe_mean_sae_mat = _load(f"safe_mean_sae_layer_{SAE_LAYER}.pt")
+        vuln_mean_sae_mat = _load(f"vulnerable_mean_sae_layer_{SAE_LAYER}.pt")
+        safe_enc_mean_mat = _load(f"safe_enc_of_mean_layer_{SAE_LAYER}.pt")
+        vuln_enc_mean_mat = _load(f"vulnerable_enc_of_mean_layer_{SAE_LAYER}.pt")
+
+        result_mean_sae    = probe_vuln_secure(safe_mean_sae_mat, vuln_mean_sae_mat)
+        result_enc_of_mean = probe_vuln_secure(safe_enc_mean_mat, vuln_enc_mean_mat)
+
+        result_last_sae = load_last_token_sae()
+        result_last_raw = load_last_token_raw()
+        result_mean_raw = load_mean_token_raw()
+
+        print("\n" + "=" * 72)
+        print(f"AUROC comparison — Layer {SAE_LAYER} — vuln vs. secure (leakage-corrected)")
+        print("=" * 72)
+        for label, r in [
+            ("Last-token  SAE",    result_last_sae),
+            ("Last-token  raw",    result_last_raw),
+            ("Mean-token  raw",    result_mean_raw),
+            ("Encode-of-mean SAE", result_enc_of_mean),
+            ("Mean-token  SAE",    result_mean_sae),
+        ]:
+            if r is None:
+                print(f"  {label:<22}  —")
+            else:
+                marker = " ← NEW" if "SAE" in label and "Mean" in label else ""
+                print(f"  {label:<22}  {r['roc_auc']:.3f} [{r['ci_lo']:.3f}–{r['ci_hi']:.3f}]{marker}")
+        print("=" * 72)
+
+        results_payload = {
+            "probe_only": True,
+            "run_dir": str(run_dir),
+            "sae_layer": SAE_LAYER,
+            "last_sae":        result_last_sae,
+            "last_raw":        result_last_raw,
+            "mean_raw":        result_mean_raw,
+            "mean_sae":        result_mean_sae,
+            "enc_of_mean_sae": result_enc_of_mean,
+        }
+        out_json = run_dir / "probe_results_corrected.json"
+        with out_json.open("w") as f:
+            json.dump(results_payload, f, indent=2)
+        print(f"Results saved: {out_json}")
+
+        all_results = {
+            "last_sae":        result_last_sae,
+            "last_raw":        result_last_raw,
+            "mean_raw":        result_mean_raw,
+            "mean_sae":        result_mean_sae,
+            "enc_of_mean_sae": result_enc_of_mean,
+        }
+        fig_comparison(all_results, PAPER_FIGS / "fig_mean_pool_sae_comparison.pdf")
+        print("\nDone.")
+        return
 
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print(f"Device: {device}")

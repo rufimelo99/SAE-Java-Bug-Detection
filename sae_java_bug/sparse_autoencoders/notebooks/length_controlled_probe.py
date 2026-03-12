@@ -81,6 +81,10 @@ RUNS_REGISTRY = [
         "run_dir": ARTIFACTS / "TO_UPLOAD",
         "label":   "Qwen-STD-SAE",
     },
+    {
+        "run_dir": ARTIFACTS / "TOPK",
+        "label":   "Qwen-TopK-SAE",
+    },
 ]
 
 
@@ -108,7 +112,10 @@ def load_jsonl(jsonl_path):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             secure_rows.append(r["secure"])
             vuln_rows.append(r["vulnerable"])
             meta_rows.append({
@@ -132,7 +139,10 @@ def load_meta_only(jsonl_path):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             rows.append({
                 "vuln_id":         r["vuln_id"],
                 "cwe":             r["cwe"],
@@ -211,21 +221,23 @@ def _bootstrap_auc_ci(y_true, y_score, n_bootstrap=500, ci=0.95):
 
 
 def run_probe(S, V, n_components=50, cv=5, n_bootstrap=500):
-    """Stack [S, V], PCA-reduce, logistic-regression OOF scores, bootstrap CI."""
+    """Stack [S, V], PCA-reduce inside each CV fold, logistic-regression OOF scores, bootstrap CI.
+    Scaler and PCA are fit inside each fold to avoid data leakage."""
     n  = len(S)
     X  = np.vstack([S, V])
     y  = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_pca  = pca.fit_transform(scaler.fit_transform(X))
-
+    n_comp  = min(n_components, X.shape[1], X.shape[0] - 1)
     clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
     skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_pca, y):
-        clf.fit(X_pca[train_idx], y[train_idx])
-        y_score[test_idx] = clf.predict_proba(X_pca[test_idx])[:, 1]
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=n_comp, random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
+        clf.fit(X_tr, y[train_idx])
+        y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score, n_bootstrap=n_bootstrap)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": n}

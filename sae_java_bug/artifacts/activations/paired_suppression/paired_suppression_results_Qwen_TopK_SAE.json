@@ -1,0 +1,18 @@
+{
+  "label": "Qwen-TopK-SAE",
+  "n_features": 28672,
+  "n_samples": 2017,
+  "n_secure_enriched": 223,
+  "n_vuln_enriched": 255,
+  "ratio": 0.87,
+  "paired_suppression": {
+    "pct_pairs_total_safe_exceeds_vuln": 72.6,
+    "mean_pair_delta_activation": 3.4888,
+    "mean_normalised_share_secure": 0.5065,
+    "median_normalised_share_secure": 0.5036
+  },
+  "magnitude_asymmetry": {
+    "pct_sec_enriched_above_diagonal": 96.9,
+    "pct_vuln_enriched_above_diagonal": 4.7
+  }
+}

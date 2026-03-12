@@ -341,23 +341,23 @@ def probe_vuln_secure(safe_mat, vuln_mat, n_components=50, cv=5, n_bootstrap=500
     y  = np.array([0] * n + [1] * n, dtype=int)
 
     # Replace NaN/Inf that can arise from fp16 overflow or zero-filled fallback rows.
-    # np.nan_to_num converts NaN→0, +inf→large finite, -inf→large negative.
     n_bad = int(np.sum(~np.isfinite(X)))
     if n_bad > 0:
         print(f"    [probe] replacing {n_bad} non-finite values (NaN/Inf) with 0")
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_pca  = pca.fit_transform(scaler.fit_transform(X))
-
-    clf    = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
-    skf    = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
+    n_comp  = min(n_components, X.shape[1], X.shape[0] - 1)
+    clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
+    skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
 
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_pca, y):
-        clf.fit(X_pca[train_idx], y[train_idx])
-        y_score[test_idx] = clf.predict_proba(X_pca[test_idx])[:, 1]
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=min(n_comp, len(train_idx) - 1), random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
+        clf.fit(X_tr, y[train_idx])
+        y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score, n_bootstrap=n_bootstrap)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": n}

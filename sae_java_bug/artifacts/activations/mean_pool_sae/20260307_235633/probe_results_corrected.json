@@ -1,0 +1,30 @@
+{
+  "probe_only": true,
+  "run_dir": "/Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection/sae_java_bug/artifacts/activations/mean_pool_sae/20260307_235633",
+  "sae_layer": 11,
+  "last_sae": null,
+  "last_raw": {
+    "roc_auc": 0.4966446225441508,
+    "ci_lo": 0.47937542828291363,
+    "ci_hi": 0.5121419575457768,
+    "n": 2493
+  },
+  "mean_raw": {
+    "roc_auc": 0.6335301262015687,
+    "ci_lo": 0.618973806629331,
+    "ci_hi": 0.6493117334055544,
+    "n": 2493
+  },
+  "mean_sae": {
+    "roc_auc": 0.39460310826623385,
+    "ci_lo": 0.3778975848013782,
+    "ci_hi": 0.4098799702793688,
+    "n": 2493
+  },
+  "enc_of_mean_sae": {
+    "roc_auc": 0.4558162399541638,
+    "ci_lo": 0.4399542142620567,
+    "ci_hi": 0.47346743329135976,
+    "n": 2493
+  }
+}

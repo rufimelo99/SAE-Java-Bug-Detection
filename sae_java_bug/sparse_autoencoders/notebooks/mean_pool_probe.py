@@ -166,22 +166,24 @@ def probe_vuln_secure(safe_mat, vuln_mat, n_components=50, cv=5, n_bootstrap=500
     """
     Binary probe: vulnerable (1) vs secure (0) over all paired samples.
     Returns dict with roc_auc, ci_lo, ci_hi, n.
+    Scaler and PCA are fit inside each CV fold to prevent data leakage.
     """
     n = len(safe_mat)
     X = np.vstack([safe_mat, vuln_mat]).astype(np.float32)
     y = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_pca  = pca.fit_transform(scaler.fit_transform(X))
-
-    clf    = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
-    skf    = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
+    n_comp  = min(n_components, X.shape[1], X.shape[0] - 1)
+    clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
+    skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
 
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_pca, y):
-        clf.fit(X_pca[train_idx], y[train_idx])
-        y_score[test_idx] = clf.predict_proba(X_pca[test_idx])[:, 1]
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=min(n_comp, len(train_idx) - 1), random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
+        clf.fit(X_tr, y[train_idx])
+        y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score, n_bootstrap=n_bootstrap)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": n}
@@ -218,8 +220,13 @@ def load_last_token_results():
         safe_pt = RAW_RUN_DIR / f"safe_layer_{layer}.pt"
         vuln_pt = RAW_RUN_DIR / f"vulnerable_layer_{layer}.pt"
         if safe_pt.exists() and vuln_pt.exists():
-            safe_mat = torch.load(safe_pt, weights_only=True).numpy().astype(np.float32)
-            vuln_mat = torch.load(vuln_pt, weights_only=True).numpy().astype(np.float32)
+            import ctypes as _ct
+            def _t2np_local(p):
+                t = torch.load(p, weights_only=True).float().contiguous()
+                buf = (_ct.c_float * t.numel()).from_address(t.data_ptr())
+                return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+            safe_mat = _t2np_local(safe_pt)
+            vuln_mat = _t2np_local(vuln_pt)
         else:
             matches = list(RAW_RUN_DIR.glob(f"activations_layer_{layer}_*.jsonl"))
             if not matches:
@@ -286,6 +293,68 @@ def fig_mean_vs_last(last_results, mean_results, out_path: Path):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--probe_only", action="store_true",
+                        help="Skip model inference; load latest cached .pt tensors and re-run probe only.")
+    args = parser.parse_args()
+
+    if args.probe_only:
+        # ── Probe-only mode: reload pre-cached activations ────────────────────
+        run_dirs = sorted((ARTIFACTS / "mean_pool").glob("*/meta.json"))
+        if not run_dirs:
+            raise FileNotFoundError(f"No mean_pool runs found under {ARTIFACTS}/mean_pool/")
+        run_dir = run_dirs[-1].parent
+        print(f"[probe-only] Loading from {run_dir}")
+
+        def _t2np(path):
+            import ctypes
+            t = torch.load(path, weights_only=True).float().contiguous()
+            buf = (ctypes.c_float * t.numel()).from_address(t.data_ptr())
+            return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+
+        mean_results = {}
+        for l in LAYERS:
+            safe_mat = _t2np(run_dir / f"safe_layer_{l}.pt")
+            vuln_mat = _t2np(run_dir / f"vulnerable_layer_{l}.pt")
+            mean_results[l] = probe_vuln_secure(safe_mat, vuln_mat)
+            r = mean_results[l]
+            print(f"  Mean-token L{l}: AUROC {r['roc_auc']:.3f} [{r['ci_lo']:.3f}–{r['ci_hi']:.3f}]")
+
+        print("\nRunning probes (last-token, from saved .pt) ...")
+        last_results = load_last_token_results()
+
+        print("\n" + "=" * 70)
+        print("Vuln vs. Secure AUROC: last-token vs. mean-token pooling (raw residual)")
+        print("=" * 70)
+        print(f"{'Layer':>6}  {'Last-token':^28}  {'Mean-token':^28}")
+        print(f"{'':>6}  {'AUROC [95% CI]':^28}  {'AUROC [95% CI]':^28}")
+        print("-" * 70)
+        for l in LAYERS:
+            def _fmt(d):
+                if d is None:
+                    return "        —        "
+                return f"{d['roc_auc']:.3f} [{d['ci_lo']:.3f}–{d['ci_hi']:.3f}]"
+            print(f"  L{l:>2}   {_fmt(last_results.get(l)):^28}  {_fmt(mean_results.get(l)):^28}")
+        print("=" * 70)
+
+        fig_path = PAPER_FIGS / "fig_mean_vs_last_token_pool.pdf"
+        fig_mean_vs_last(last_results, mean_results, fig_path)
+
+        results_payload = {
+            "probe_only": True,
+            "run_dir": str(run_dir),
+            "layers": LAYERS,
+            "last_token": {str(l): last_results[l] for l in LAYERS if l in last_results},
+            "mean_token": {str(l): mean_results[l] for l in LAYERS if l in mean_results},
+        }
+        out_json = run_dir / "probe_results_corrected.json"
+        with out_json.open("w") as f:
+            json.dump(results_payload, f, indent=2)
+        print(f"Results saved: {out_json}")
+        print("\nDone.")
+        return
+
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print(f"Device: {device}")
     print(f"Source JSONL: {SOURCE_JSONL}")

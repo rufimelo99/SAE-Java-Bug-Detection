@@ -77,21 +77,23 @@ def probe(safe_mat, vuln_mat, n_components, cv=5):
     X = np.vstack([safe_mat, vuln_mat]).astype(np.float32)
     y = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    X_sc   = scaler.fit_transform(X)
-
-    if n_components is not None:
-        nc    = min(n_components, X_sc.shape[1], X_sc.shape[0] - 1)
-        X_in  = PCA(n_components=nc, random_state=SEED).fit_transform(X_sc)
-    else:
-        X_in  = X_sc   # full dimensionality
-
     clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
     skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
     y_score = np.zeros(len(y), dtype=float)
-    for tr, te in skf.split(X_in, y):
-        clf.fit(X_in[tr], y[tr])
-        y_score[te] = clf.predict_proba(X_in[te])[:, 1]
+    for tr, te in skf.split(X, y):
+        scaler   = StandardScaler()
+        X_tr_sc  = scaler.fit_transform(X[tr])
+        X_te_sc  = scaler.transform(X[te])
+        if n_components is not None:
+            nc      = min(n_components, X_tr_sc.shape[1], len(tr) - 1)
+            pca     = PCA(n_components=nc, random_state=SEED)
+            X_tr_in = pca.fit_transform(X_tr_sc)
+            X_te_in = pca.transform(X_te_sc)
+        else:
+            X_tr_in = X_tr_sc
+            X_te_in = X_te_sc
+        clf.fit(X_tr_in, y[tr])
+        y_score[te] = clf.predict_proba(X_te_in)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi}
@@ -99,15 +101,20 @@ def probe(safe_mat, vuln_mat, n_components, cv=5):
 
 # ── Load activations ───────────────────────────────────────────────────────────
 
+def _t2np(path):
+    import ctypes
+    t = torch.load(path, map_location="cpu", weights_only=True).float().contiguous()
+    buf = (ctypes.c_float * t.numel()).from_address(t.data_ptr())
+    return np.ctypeslib.as_array(buf).reshape(t.shape).copy()
+
+
 def load_mean_pool(layer):
     run_root = ARTIFACTS / "mean_pool"
     for run_dir in sorted(run_root.iterdir(), reverse=True):
         sp = run_dir / f"safe_layer_{layer}.pt"
         vp = run_dir / f"vulnerable_layer_{layer}.pt"
         if sp.exists() and vp.exists():
-            s = torch.load(sp, map_location="cpu", weights_only=True).numpy().astype(np.float32)
-            v = torch.load(vp, map_location="cpu", weights_only=True).numpy().astype(np.float32)
-            return s, v
+            return _t2np(sp), _t2np(vp)
     raise FileNotFoundError(f"No mean_pool activations found for layer {layer}")
 
 

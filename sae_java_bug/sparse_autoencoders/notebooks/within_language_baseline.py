@@ -28,6 +28,7 @@ import torch
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
@@ -103,6 +104,12 @@ RUNS_REGISTRY = [
         "kind":        "sae",
         "min_samples": 100,
     },
+    {
+        "run_dir":     ARTIFACTS / "TOPK",
+        "label":       "Qwen-TopK-SAE",
+        "kind":        "sae",
+        "min_samples": 100,
+    },
 ]
 
 
@@ -117,7 +124,10 @@ def load_jsonl_meta(jsonl_path):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             records.append({
                 "vuln_id":        r["vuln_id"],
                 "cwe":            r["cwe"],
@@ -133,7 +143,10 @@ def load_jsonl_activations(jsonl_path):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             secure_rows.append(r["secure"])
             vuln_rows.append(r["vulnerable"])
     return np.array(secure_rows, dtype=np.float32), np.array(vuln_rows, dtype=np.float32)
@@ -208,17 +221,19 @@ def load_all_layers():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def probe_cwe_families(delta, meta, families, n_components=50, cv=5):
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, delta.shape[1], delta.shape[0]-1), random_state=SEED)
-    X      = pca.fit_transform(scaler.fit_transform(delta))
+    n_comp = min(n_components, delta.shape[1], delta.shape[0] - 1)
     rows   = []
     for fam in families:
         y = (meta["family"].values == fam).astype(int)
         if y.sum() < 10 or (1-y).sum() < 10:
             continue
-        clf = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
+        pipe = Pipeline([
+            ("scaler", StandardScaler()),
+            ("pca",    PCA(n_components=n_comp, random_state=SEED)),
+            ("clf",    LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)),
+        ])
         skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
-        auc = cross_val_score(clf, X, y, cv=skf, scoring="roc_auc").mean()
+        auc = cross_val_score(pipe, delta, y, cv=skf, scoring="roc_auc").mean()
         rows.append({"family": fam, "n_pos": int(y.sum()), "roc_auc": auc})
     return pd.DataFrame(rows).set_index("family")
 
@@ -235,20 +250,22 @@ def probe_within_language(delta, meta, ext, families, n_components=30, cv=5):
     mask = (meta["file_extension"] == ext).values
     if mask.sum() < 30:
         return None
-    d_sub = delta[mask]
-    m_sub = meta[mask].reset_index(drop=True)
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, d_sub.shape[1], d_sub.shape[0]-1), random_state=SEED)
-    X      = pca.fit_transform(scaler.fit_transform(d_sub))
+    d_sub  = delta[mask]
+    m_sub  = meta[mask].reset_index(drop=True)
+    n_comp = min(n_components, d_sub.shape[1], d_sub.shape[0] - 1)
     rows   = []
     for fam in families:
         y = (m_sub["family"].values == fam).astype(int)
         if y.sum() < 5 or (1-y).sum() < 5:
             continue
-        clf = LogisticRegression(C=0.1, max_iter=500, class_weight="balanced", random_state=SEED)
+        pipe = Pipeline([
+            ("scaler", StandardScaler()),
+            ("pca",    PCA(n_components=n_comp, random_state=SEED)),
+            ("clf",    LogisticRegression(C=0.1, max_iter=500, class_weight="balanced", random_state=SEED)),
+        ])
         skf = StratifiedKFold(n_splits=min(cv, int(y.sum())), shuffle=True, random_state=SEED)
         try:
-            auc = cross_val_score(clf, X, y, cv=skf, scoring="roc_auc").mean()
+            auc = cross_val_score(pipe, d_sub, y, cv=skf, scoring="roc_auc").mean()
             rows.append({"family": fam, "n_pos": int(y.sum()), "n_total": int(mask.sum()), "roc_auc": auc})
         except Exception:
             pass
@@ -262,11 +279,8 @@ def pairwise_family_probe(delta, meta, families, n_components=50, cv=5):
     NxN symmetric DataFrame: entry (i,j) = binary logistic-regression ROC-AUC
     for family_i vs family_j. Diagonal and unreachable pairs are NaN.
     """
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, delta.shape[1], delta.shape[0]-1), random_state=SEED)
-    X      = pca.fit_transform(scaler.fit_transform(delta))
-    n      = len(families)
-    mat    = np.full((n, n), np.nan)
+    n   = len(families)
+    mat = np.full((n, n), np.nan)
     for i, fam_i in enumerate(families):
         for j, fam_j in enumerate(families):
             if i >= j:
@@ -274,15 +288,20 @@ def pairwise_family_probe(delta, meta, families, n_components=50, cv=5):
             mask = (meta["family"].values == fam_i) | (meta["family"].values == fam_j)
             if mask.sum() < 20:
                 continue
-            X_sub = X[mask]
-            y     = (meta["family"].values[mask] == fam_i).astype(int)
+            d_sub  = delta[mask]
+            y      = (meta["family"].values[mask] == fam_i).astype(int)
             if y.sum() < 5 or (1-y).sum() < 5:
                 continue
-            clf = LogisticRegression(C=0.1, max_iter=500, class_weight="balanced", random_state=SEED)
+            n_comp = min(n_components, d_sub.shape[1], d_sub.shape[0] - 1)
+            pipe = Pipeline([
+                ("scaler", StandardScaler()),
+                ("pca",    PCA(n_components=n_comp, random_state=SEED)),
+                ("clf",    LogisticRegression(C=0.1, max_iter=500, class_weight="balanced", random_state=SEED)),
+            ])
             k   = min(cv, int(y.sum()), int((1-y).sum()))
             skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=SEED)
             try:
-                auc       = cross_val_score(clf, X_sub, y, cv=skf, scoring="roc_auc").mean()
+                auc       = cross_val_score(pipe, d_sub, y, cv=skf, scoring="roc_auc").mean()
                 mat[i, j] = auc
                 mat[j, i] = auc
             except Exception:
@@ -597,18 +616,19 @@ def probe_vuln_secure(safe_mat, vuln_mat, meta, ext=None, n_components=50, cv=5,
     X = np.vstack([S, V])
     y = np.array([0] * n + [1] * n, dtype=int)
 
-    scaler = StandardScaler()
-    pca    = PCA(n_components=min(n_components, X.shape[1], X.shape[0] - 1), random_state=SEED)
-    X_pca  = pca.fit_transform(scaler.fit_transform(X))
+    n_comp  = min(n_components, X.shape[1], X.shape[0] - 1)
+    clf     = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
+    skf     = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
 
-    clf = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=SEED)
-    skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=SEED)
-
-    # Collect out-of-fold scores for bootstrap
+    # Collect out-of-fold scores for bootstrap; scaler+PCA fit inside each fold
     y_score = np.zeros(len(y), dtype=float)
-    for train_idx, test_idx in skf.split(X_pca, y):
-        clf.fit(X_pca[train_idx], y[train_idx])
-        y_score[test_idx] = clf.predict_proba(X_pca[test_idx])[:, 1]
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        pca    = PCA(n_components=n_comp, random_state=SEED)
+        X_tr   = pca.fit_transform(scaler.fit_transform(X[train_idx]))
+        X_te   = pca.transform(scaler.transform(X[test_idx]))
+        clf.fit(X_tr, y[train_idx])
+        y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
     mean_auc, ci_lo, ci_hi = _bootstrap_auc_ci(y, y_score, n_bootstrap=n_bootstrap)
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": int(n)}
@@ -709,6 +729,25 @@ def fig_vuln_secure_by_layer(layers_data):
             return f"{r['roc_auc']:.3f} [{r['ci_lo']:.3f}-{r['ci_hi']:.3f}]" if r else "       —      "
         for layer, g, c, p, j in zip(rd["layers"], rd["global"], rd["c_only"], rd["php_only"], rd["js_only"]):
             print(f"  {layer:>5}  {_fmt(g):>24}  {_fmt(c):>24}  {_fmt(p):>24}  {_fmt(j):>24}")
+
+    # Save results as JSON
+    save_path = ARTIFACTS / "within_lang_baseline_results.json"
+    payload = {}
+    for run_name, rd in run_results.items():
+        payload[run_name] = {
+            str(layer): {
+                "global":   g,
+                "c_only":   c,
+                "php_only": p,
+                "js_only":  j,
+            }
+            for layer, g, c, p, j in zip(
+                rd["layers"], rd["global"], rd["c_only"], rd["php_only"], rd["js_only"]
+            )
+        }
+    with save_path.open("w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"\nResults saved: {save_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
