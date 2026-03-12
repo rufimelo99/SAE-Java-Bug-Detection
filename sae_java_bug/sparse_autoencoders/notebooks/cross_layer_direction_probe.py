@@ -34,10 +34,8 @@ from pathlib import Path
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 import torch
-from sklearn.manifold import MDS
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 HERE       = Path(__file__).parent
@@ -227,83 +225,28 @@ def fig_alignment(align_per_layer: list[np.ndarray], c_mask: np.ndarray, out_pat
 
 # ── Combined summary figure ───────────────────────────────────────────────────
 def fig_direction_summary(
-    dirs_global: list[np.ndarray],
-    dirs_c: list[np.ndarray],
     norms_per_layer: list[np.ndarray],
     align_per_layer: list[np.ndarray],
     c_mask: np.ndarray,
     out_path: Path,
 ):
     """
-    Three-panel summary figure:
-      A (left)   — MDS 2-D scatter of vulnerability direction vectors
-      B (middle) — Mean paired distance ||δ||₂ across layers
-      C (right)  — Fraction of pairs with positive alignment across layers
+    Two-panel summary figure:
+      A (left)  — Mean paired distance ||δ||₂ across layers
+      B (right) — Fraction of pairs with positive alignment across layers
     """
-    # ── Layer colour map: light→dark blue for L0–L23, vivid red for L27
     n_layers = len(LAYERS)
-    base_cmap = plt.cm.Blues
-    layer_colors = [base_cmap(0.35 + 0.55 * i / (n_layers - 2)) for i in range(n_layers - 1)]
-    layer_colors.append("#d62728")   # L27 in red — the outlier
-
     ll = _layer_labels()
+    xs = list(range(n_layers))
 
-    fig = plt.figure(figsize=(12, 3.8))
-    gs  = fig.add_gridspec(1, 3, wspace=0.38)
-    ax_mds  = fig.add_subplot(gs[0])
-    ax_norm = fig.add_subplot(gs[1])
-    ax_aln  = fig.add_subplot(gs[2])
+    fig, (ax_norm, ax_aln) = plt.subplots(1, 2, figsize=(9, 3.8),
+                                           gridspec_kw={"wspace": 0.38})
 
-    # ── Panel A: MDS of direction vectors ────────────────────────────────────
-    cos_mat  = cosine_matrix(dirs_global)          # [L, L]
-    ang_dist = np.arccos(np.clip(cos_mat, -1, 1)) / np.pi  # angular → [0,1]
-
-    mds    = MDS(n_components=2, dissimilarity="precomputed",
-                 random_state=SEED, normalized_stress=False)
-    coords = mds.fit_transform(ang_dist)           # [L, 2]
-
-    # Draw connecting path (trajectory) in grey
-    ax_mds.plot(coords[:, 0], coords[:, 1], "-", color="grey",
-                lw=0.8, alpha=0.4, zorder=1)
-
-    # Scatter each direction, sized by layer index (later = bigger)
-    for i, (label, color) in enumerate(zip(ll, layer_colors)):
-        s = 60 + 10 * i
-        ax_mds.scatter(coords[i, 0], coords[i, 1], s=s, color=color,
-                       zorder=3, edgecolors="white", linewidths=0.6)
-        # Label offset: nudge to avoid overlap
-        dx, dy = 0.005, 0.005
-        if label in ("L3", "L7"):
-            dx, dy = -0.013, 0.006
-        elif label == "L27":
-            dx, dy = 0.006, -0.010
-        ax_mds.text(coords[i, 0] + dx, coords[i, 1] + dy, label,
-                    fontsize=7, ha="left", va="bottom", color=color,
-                    fontweight="bold" if label == "L27" else "normal")
-
-    # Ellipse around the L3–L23 stable cluster (layers index 1..6)
-    cluster = coords[1:-1]   # L3 through L23
-    cx, cy  = cluster.mean(0)
-    rx = (cluster[:, 0].max() - cluster[:, 0].min()) / 2 + 0.012
-    ry = (cluster[:, 1].max() - cluster[:, 1].min()) / 2 + 0.012
-    ellipse = mpatches.Ellipse((cx, cy), 2 * rx, 2 * ry,
-                               linewidth=1.0, edgecolor="#4878cf",
-                               facecolor="#4878cf", alpha=0.10, zorder=2)
-    ax_mds.add_patch(ellipse)
-    ax_mds.text(cx, cy + ry + 0.008, "L3–L23\nstable cluster",
-                ha="center", va="bottom", fontsize=6.5, color="#1a3a6c", style="italic")
-
-    ax_mds.set_xlabel("MDS dim 1", fontsize=8)
-    ax_mds.set_ylabel("MDS dim 2", fontsize=8)
-    ax_mds.set_title("(A) Vulnerability direction map\n(angular distance between layers)", fontsize=8)
-    ax_mds.set_aspect("equal")
-
-    # ── Panel B: mean ||δ||₂ trajectory ──────────────────────────────────────
-    xs        = list(range(n_layers))
-    means_all = [n.mean()        for n in norms_per_layer]
-    means_c   = [n[c_mask].mean() for n in norms_per_layer]
-    stds_all  = [n.std()          for n in norms_per_layer]
-    stds_c    = [n[c_mask].std()  for n in norms_per_layer]
+    # ── Panel A: mean ||δ||₂ trajectory ──────────────────────────────────────
+    means_all = [n.mean()          for n in norms_per_layer]
+    means_c   = [n[c_mask].mean()  for n in norms_per_layer]
+    stds_all  = [n.std()           for n in norms_per_layer]
+    stds_c    = [n[c_mask].std()   for n in norms_per_layer]
 
     ax_norm.plot(xs, means_all, "o-", color="#4878cf", lw=1.5, ms=5, label="Global")
     ax_norm.fill_between(xs,
@@ -315,34 +258,30 @@ def fig_direction_summary(
                          [m - s for m, s in zip(means_c, stds_c)],
                          [m + s for m, s in zip(means_c, stds_c)],
                          color="#e07b39", alpha=0.12)
-
-    # Mark L27 as anomalous
     ax_norm.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
 
     ax_norm.set_xticks(xs)
     ax_norm.set_xticklabels(ll, rotation=45)
     ax_norm.set_xlabel("Layer")
     ax_norm.set_ylabel(r"Mean $\|\delta_i^L\|_2$")
-    ax_norm.set_title("(B) Paired representation distance\n", fontsize=8)
+    ax_norm.set_title("(A) Paired representation distance\n", fontsize=8)
     ax_norm.legend(fontsize=7, loc="upper left")
 
-    # ── Panel C: fraction positive alignment ──────────────────────────────────
-    frac_all = [np.mean(a      > 0) for a in align_per_layer]
-    frac_c   = [np.mean(a[c_mask] > 0) for a in align_per_layer]
+    # ── Panel B: fraction positive alignment ──────────────────────────────────
+    frac_all = [np.mean(a          > 0) for a in align_per_layer]
+    frac_c   = [np.mean(a[c_mask]  > 0) for a in align_per_layer]
 
     ax_aln.plot(xs, frac_all, "o-", color="#4878cf", lw=1.5, ms=5, label="Global")
     ax_aln.plot(xs, frac_c,   "s--", color="#e07b39", lw=1.2, ms=4, label="Within-C")
     ax_aln.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance")
     ax_aln.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
-
-    # Shade the stable plateau (L3–L23)
     ax_aln.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.06, label="Stable plateau")
 
     ax_aln.set_xticks(xs)
     ax_aln.set_xticklabels(ll, rotation=45)
     ax_aln.set_xlabel("Layer")
     ax_aln.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$")
-    ax_aln.set_title("(C) Per-pair alignment to vulnerability direction\n", fontsize=8)
+    ax_aln.set_title("(B) Per-pair alignment to vulnerability direction\n", fontsize=8)
     ax_aln.set_ylim(0.45, 0.95)
     ax_aln.legend(fontsize=7, loc="lower left")
 
@@ -427,7 +366,7 @@ def main():
 
     # ── Figures
     fig_direction_summary(
-        dirs_global, dirs_c, norms_per_layer, align_per_layer, c_mask,
+        norms_per_layer, align_per_layer, c_mask,
         PAPER_FIGS / "fig_direction_summary.pdf",
     )
     fig_cosine_heatmap(cos_global, cos_c,
