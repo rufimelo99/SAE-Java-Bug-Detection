@@ -14,7 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from sae_java_bug.logger import logger
 from sae_java_bug.sparse_autoencoders.schemas import (
-    QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE_CONFIG,
+    QWEN_CODER_7B_VULNEABLE_CODE_STD_CONFIG,
     SAEConfig,
 )
 
@@ -200,4 +200,4 @@ def run(cfg: SAEConfig):
 
 
 if __name__ == "__main__":
-    run(QWEN_CODER_7B_SECURE_CODE_TOPK_INFONCE_CONFIG)
+    run(QWEN_CODER_7B_VULNEABLE_CODE_STD_CONFIG)

@@ -1,0 +1,177 @@
+{
+  "n_samples": 2493,
+  "sign_test": [
+    {
+      "feature_idx": 80,
+      "frac_pos": 0.7894736842105263,
+      "n_pos": 15,
+      "n_bins": 19,
+      "p_sign": 0.00960540771484375,
+      "label": "Cond. branching & resource dispatch"
+    },
+    {
+      "feature_idx": 4135,
+      "frac_pos": 0.47368421052631576,
+      "n_pos": 9,
+      "n_bins": 19,
+      "p_sign": 0.6761970520019531,
+      "label": "Function entry & parameter setup"
+    },
+    {
+      "feature_idx": 1185,
+      "frac_pos": 0.9473684210526315,
+      "n_pos": 18,
+      "n_bins": 19,
+      "p_sign": 3.814697265625e-05,
+      "label": "Security config & input sanitisation"
+    },
+    {
+      "feature_idx": 6401,
+      "frac_pos": 0.9473684210526315,
+      "n_pos": 18,
+      "n_bins": 19,
+      "p_sign": 3.814697265625e-05,
+      "label": "Short snippets, incomplete security"
+    },
+    {
+      "feature_idx": 13920,
+      "frac_pos": 0.2631578947368421,
+      "n_pos": 5,
+      "n_bins": 19,
+      "p_sign": 0.9903945922851562,
+      "label": "Control flow past validation"
+    },
+    {
+      "feature_idx": 2860,
+      "frac_pos": 0.15789473684210525,
+      "n_pos": 3,
+      "n_bins": 19,
+      "p_sign": 0.9996356964111328,
+      "label": "Input parsing, inadequate validation"
+    },
+    {
+      "feature_idx": 14439,
+      "frac_pos": 0.7368421052631579,
+      "n_pos": 14,
+      "n_bins": 19,
+      "p_sign": 0.0317840576171875,
+      "label": "End-of-file & file termination"
+    },
+    {
+      "feature_idx": 15720,
+      "frac_pos": 0.47368421052631576,
+      "n_pos": 9,
+      "n_bins": 19,
+      "p_sign": 0.6761970520019531,
+      "label": "Config/protocol & HTTP headers"
+    },
+    {
+      "feature_idx": 15765,
+      "frac_pos": 0.3157894736842105,
+      "n_pos": 6,
+      "n_bins": 19,
+      "p_sign": 0.9682159423828125,
+      "label": "Raw memory ops & pointer manip."
+    },
+    {
+      "feature_idx": 9193,
+      "frac_pos": 0.7368421052631579,
+      "n_pos": 14,
+      "n_bins": 19,
+      "p_sign": 0.0317840576171875,
+      "label": "Resource cleanup & error-handling"
+    }
+  ],
+  "per_feature_probe_bins1_19": [
+    {
+      "feature_idx": 80,
+      "auc": 0.5065798257390576,
+      "ci_lo": 0.49142006052020154,
+      "ci_hi": 0.5220443764013349,
+      "label": "Cond. branching & resource dispatch"
+    },
+    {
+      "feature_idx": 4135,
+      "auc": 0.48701026704433903,
+      "ci_lo": 0.4713835686255044,
+      "ci_hi": 0.5026321448931477,
+      "label": "Function entry & parameter setup"
+    },
+    {
+      "feature_idx": 1185,
+      "auc": 0.53143915254141,
+      "ci_lo": 0.5155900746911157,
+      "ci_hi": 0.5473022266153236,
+      "label": "Security config & input sanitisation"
+    },
+    {
+      "feature_idx": 6401,
+      "auc": 0.515539303757634,
+      "ci_lo": 0.49974475123141127,
+      "ci_hi": 0.5314544614463625,
+      "label": "Short snippets, incomplete security"
+    },
+    {
+      "feature_idx": 13920,
+      "auc": 0.5189606170378629,
+      "ci_lo": 0.5023745929486948,
+      "ci_hi": 0.5348080293072769,
+      "label": "Control flow past validation"
+    },
+    {
+      "feature_idx": 2860,
+      "auc": 0.5144645078513868,
+      "ci_lo": 0.4986284307318185,
+      "ci_hi": 0.530096040856479,
+      "label": "Input parsing, inadequate validation"
+    },
+    {
+      "feature_idx": 14439,
+      "auc": 0.5002562186109062,
+      "ci_lo": 0.48364151973491515,
+      "ci_hi": 0.5167785484423233,
+      "label": "End-of-file & file termination"
+    },
+    {
+      "feature_idx": 15720,
+      "auc": 0.483642260778425,
+      "ci_lo": 0.46779687389820934,
+      "ci_hi": 0.4983027844913397,
+      "label": "Config/protocol & HTTP headers"
+    },
+    {
+      "feature_idx": 15765,
+      "auc": 0.5055931973638912,
+      "ci_lo": 0.4898777807149019,
+      "ci_hi": 0.5213924161362276,
+      "label": "Raw memory ops & pointer manip."
+    },
+    {
+      "feature_idx": 9193,
+      "auc": 0.5141054611553441,
+      "ci_lo": 0.4979815714562646,
+      "ci_hi": 0.5300458134581703,
+      "label": "Resource cleanup & error-handling"
+    }
+  ],
+  "combined_probe_bins1_19": {
+    "auc": 0.5377539843290059,
+    "ci_lo": 0.521212970628391,
+    "ci_hi": 0.5536588206638885
+  },
+  "full_profile_probe_bins1_19": {
+    "auc": 0.5288805755534681,
+    "ci_lo": 0.5125273736751408,
+    "ci_hi": 0.5445799067270716
+  },
+  "f1185_bin0_probe": {
+    "auc": 0.5021582655938372,
+    "ci_lo": 0.4857804326480565,
+    "ci_hi": 0.5187275427522644
+  },
+  "f1185_bins1_19_probe": {
+    "auc": 0.53143915254141,
+    "ci_lo": 0.5155900746911157,
+    "ci_hi": 0.5473022266153236
+  }
+}
