@@ -1,0 +1,1430 @@
+{
+  "Qwen-Raw": {
+    "0": {
+      "raw_cwe": {
+        "Memory Safety": 0.6198051528454964,
+        "Injection": 0.6896912491178546,
+        "Info Disclosure": 0.5160428676239388,
+        "Access Control": 0.5134173998918997,
+        "Resource Mgmt": 0.5410722926127919
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.4923301596941628,
+        "Injection": 0.5538045732158882,
+        "Info Disclosure": 0.5230416098941411,
+        "Access Control": 0.5494330212865188,
+        "Resource Mgmt": 0.5424044842151606
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5423409864798082,
+          "Injection": 0.5163380736910149,
+          "Info Disclosure": 0.5781062951496387,
+          "Access Control": 0.492956417790068,
+          "Resource Mgmt": 0.527001304471284
+        },
+        "php": {
+          "Injection": 0.5885007766387076,
+          "Info Disclosure": 0.47475572047000625,
+          "Access Control": 0.5523167848699764,
+          "Resource Mgmt": 0.5224675324675324
+        },
+        "js": {
+          "Injection": 0.5971739657401423,
+          "Info Disclosure": 0.596551724137931,
+          "Access Control": 0.3563390313390314,
+          "Resource Mgmt": 0.6437747035573123
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.44482952882644744,
+          "ci_lo": 0.42939894106961585,
+          "ci_hi": 0.4601461943974097,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.4076442700376259,
+          "ci_lo": 0.38627340855992875,
+          "ci_hi": 0.42965267308130173,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.343636269439236,
+          "ci_lo": 0.3124268533372802,
+          "ci_hi": 0.376905641933093,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.16778184386890474,
+          "ci_lo": 0.12487477911368285,
+          "ci_hi": 0.21119168916589376,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5073260722728807,
+          "Resource Mgmt": 0.5291214946191746,
+          "Info Disclosure": 0.5941490398573266
+        },
+        "Access Control": {
+          "Memory Safety": 0.5073260722728807,
+          "Access Control": null,
+          "Resource Mgmt": 0.5106648936170213,
+          "Info Disclosure": 0.6106052631578948
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5291214946191746,
+          "Access Control": 0.5106648936170213,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.6388251213139231
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5941490398573266,
+          "Access Control": 0.6106052631578948,
+          "Resource Mgmt": 0.6388251213139231,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "3": {
+      "raw_cwe": {
+        "Memory Safety": 0.6103588138152167,
+        "Injection": 0.6758202645129251,
+        "Info Disclosure": 0.5917099884708101,
+        "Access Control": 0.5321516507138393,
+        "Resource Mgmt": 0.5553152122590721
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.4998488201119643,
+        "Injection": 0.5268104019097903,
+        "Info Disclosure": 0.570479509485379,
+        "Access Control": 0.5606355727250352,
+        "Resource Mgmt": 0.553003479561035
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5787312556008164,
+          "Injection": 0.3910364145658264,
+          "Info Disclosure": 0.6473679741270731,
+          "Access Control": 0.48152134462495677,
+          "Resource Mgmt": 0.5148670810671669
+        },
+        "php": {
+          "Injection": 0.6278981050015533,
+          "Info Disclosure": 0.592358276643991,
+          "Access Control": 0.5000945626477542,
+          "Resource Mgmt": 0.563292104720676
+        },
+        "js": {
+          "Injection": 0.6752727052359406,
+          "Info Disclosure": 0.4413793103448276,
+          "Access Control": 0.6320987654320989,
+          "Resource Mgmt": 0.5936758893280631
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.5397101749442518,
+          "ci_lo": 0.5242619679973236,
+          "ci_hi": 0.5546743239272057,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.49290827329135206,
+          "ci_lo": 0.4705146684897808,
+          "ci_hi": 0.5154837952460305,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.39752269471091356,
+          "ci_lo": 0.36440010990774196,
+          "ci_hi": 0.4319112436777571,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.17701643151326402,
+          "ci_lo": 0.13512226585460718,
+          "ci_hi": 0.22230759938502084,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.526108015310143,
+          "Resource Mgmt": 0.5508155145137377,
+          "Info Disclosure": 0.6492106892526825
+        },
+        "Access Control": {
+          "Memory Safety": 0.526108015310143,
+          "Access Control": null,
+          "Resource Mgmt": 0.4811879432624114,
+          "Info Disclosure": 0.6424473684210527
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5508155145137377,
+          "Access Control": 0.4811879432624114,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.6142833146696528
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.6492106892526825,
+          "Access Control": 0.6424473684210527,
+          "Resource Mgmt": 0.6142833146696528,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "7": {
+      "raw_cwe": {
+        "Memory Safety": 0.5939060125676472,
+        "Injection": 0.6320811878686496,
+        "Info Disclosure": 0.5694156796981449,
+        "Access Control": 0.5079946683189362,
+        "Resource Mgmt": 0.520023186217663
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5154672051106199,
+        "Injection": 0.5220604520069352,
+        "Info Disclosure": 0.5561172833036371,
+        "Access Control": 0.5379054322995985,
+        "Resource Mgmt": 0.5225524114198088
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5738633728822774,
+          "Injection": 0.15067873303167417,
+          "Info Disclosure": 0.6321072540081095,
+          "Access Control": 0.5988387198986058,
+          "Resource Mgmt": 0.5135102964893464
+        },
+        "php": {
+          "Injection": 0.575735321528425,
+          "Info Disclosure": 0.5553968253968253,
+          "Access Control": 0.5120567375886524,
+          "Resource Mgmt": 0.7109853638425067
+        },
+        "js": {
+          "Injection": 0.43418915643180356,
+          "Info Disclosure": 0.5586206896551724,
+          "Access Control": 0.5517806267806268,
+          "Resource Mgmt": 0.49352766798418973
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.4955911921757558,
+          "ci_lo": 0.4797565888504429,
+          "ci_hi": 0.5112717957491354,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.43420873022700957,
+          "ci_lo": 0.4129297976328901,
+          "ci_hi": 0.4545473343286465,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3686373262229844,
+          "ci_lo": 0.337156275789907,
+          "ci_hi": 0.4031158431086806,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.16921852597696926,
+          "ci_lo": 0.12749049350470523,
+          "ci_hi": 0.21710312760450937,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.6159059439378588,
+          "Resource Mgmt": 0.5225463456973756,
+          "Info Disclosure": 0.6559339246461308
+        },
+        "Access Control": {
+          "Memory Safety": 0.6159059439378588,
+          "Access Control": null,
+          "Resource Mgmt": 0.47594858156028375,
+          "Info Disclosure": 0.6609736842105264
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5225463456973756,
+          "Access Control": 0.47594858156028375,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5351754385964913
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.6559339246461308,
+          "Access Control": 0.6609736842105264,
+          "Resource Mgmt": 0.5351754385964913,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "11": {
+      "raw_cwe": {
+        "Memory Safety": 0.5915888489727636,
+        "Injection": 0.6329671232041263,
+        "Info Disclosure": 0.5458369143695629,
+        "Access Control": 0.48594087900673627,
+        "Resource Mgmt": 0.5163671872715275
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5179280402729127,
+        "Injection": 0.48772983698824673,
+        "Info Disclosure": 0.508011214757363,
+        "Access Control": 0.5036332149369929,
+        "Resource Mgmt": 0.5188289381543119
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.536932872824758,
+          "Injection": 0.42868320405085114,
+          "Info Disclosure": 0.5380295458423733,
+          "Access Control": 0.5502380746629796,
+          "Resource Mgmt": 0.4830873348777964
+        },
+        "php": {
+          "Injection": 0.5723566324945635,
+          "Info Disclosure": 0.4211111111111111,
+          "Access Control": 0.6562411347517731,
+          "Resource Mgmt": 0.5975468975468976
+        },
+        "js": {
+          "Injection": 0.5521715416936005,
+          "Info Disclosure": 0.18275862068965515,
+          "Access Control": 0.3798195631528965,
+          "Resource Mgmt": 0.4567687747035573
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.4966446225441508,
+          "ci_lo": 0.47937542828291363,
+          "ci_hi": 0.5121419575457768,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.46546242182380715,
+          "ci_lo": 0.4425900828359178,
+          "ci_hi": 0.48739360041571067,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.33661214847516224,
+          "ci_lo": 0.30656649769528366,
+          "ci_hi": 0.37342156349300387,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.16999083032350654,
+          "ci_lo": 0.12174561768776988,
+          "ci_hi": 0.22168100733803783,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5392257683215129,
+          "Resource Mgmt": 0.5313321180667832,
+          "Info Disclosure": 0.5832666625191821
+        },
+        "Access Control": {
+          "Memory Safety": 0.5392257683215129,
+          "Access Control": null,
+          "Resource Mgmt": 0.5026241134751773,
+          "Info Disclosure": 0.6673947368421052
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5313321180667832,
+          "Access Control": 0.5026241134751773,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5259341172079134
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5832666625191821,
+          "Access Control": 0.6673947368421052,
+          "Resource Mgmt": 0.5259341172079134,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "15": {
+      "raw_cwe": {
+        "Memory Safety": 0.5843213702015108,
+        "Injection": 0.6460349852322329,
+        "Info Disclosure": 0.5591552248192014,
+        "Access Control": 0.45731145780454413,
+        "Resource Mgmt": 0.5485754643092429
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5298941838667242,
+        "Injection": 0.4896294771600583,
+        "Info Disclosure": 0.5481799601718899,
+        "Access Control": 0.511263475384469,
+        "Resource Mgmt": 0.5376091284241958
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5487375981235311,
+          "Injection": 0.40524402068519716,
+          "Info Disclosure": 0.5878354176316195,
+          "Access Control": 0.5211347793524599,
+          "Resource Mgmt": 0.5055707255409561
+        },
+        "php": {
+          "Injection": 0.6202696489593041,
+          "Info Disclosure": 0.4666274994846423,
+          "Access Control": 0.5625531914893618,
+          "Resource Mgmt": 0.5493877551020407
+        },
+        "js": {
+          "Injection": 0.4351062540400775,
+          "Info Disclosure": 0.2655172413793103,
+          "Access Control": 0.5071462488129155,
+          "Resource Mgmt": 0.5546442687747034
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.5137055001637222,
+          "ci_lo": 0.4972097947734339,
+          "ci_hi": 0.5296196921228316,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.485439815053333,
+          "ci_lo": 0.4646501550202929,
+          "ci_hi": 0.5081834897458162,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3412390957539925,
+          "ci_lo": 0.3102169728438484,
+          "ci_hi": 0.3796689359445624,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.14329795801258513,
+          "ci_lo": 0.10507762654337453,
+          "ci_hi": 0.18530607877325533,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.4990411460092311,
+          "Resource Mgmt": 0.5595944081571063,
+          "Info Disclosure": 0.5870692689169733
+        },
+        "Access Control": {
+          "Memory Safety": 0.4990411460092311,
+          "Access Control": null,
+          "Resource Mgmt": 0.5078014184397164,
+          "Info Disclosure": 0.6078157894736841
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5595944081571063,
+          "Access Control": 0.5078014184397164,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5468822321761851
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5870692689169733,
+          "Access Control": 0.6078157894736841,
+          "Resource Mgmt": 0.5468822321761851,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "19": {
+      "raw_cwe": {
+        "Memory Safety": 0.561588117336035,
+        "Injection": 0.6536162079510703,
+        "Info Disclosure": 0.5489508437270726,
+        "Access Control": 0.517916956408191,
+        "Resource Mgmt": 0.529521160904707
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.529136816703839,
+        "Injection": 0.5006510232886381,
+        "Info Disclosure": 0.5132758620689655,
+        "Access Control": 0.5133420452447778,
+        "Resource Mgmt": 0.5052106506258053
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5652484444764767,
+          "Injection": 0.237491919844861,
+          "Info Disclosure": 0.5938526608322567,
+          "Access Control": 0.5597319679686601,
+          "Resource Mgmt": 0.4995467459966584
+        },
+        "php": {
+          "Injection": 0.5922808325566946,
+          "Info Disclosure": 0.4367326324469182,
+          "Access Control": 0.6626241134751772,
+          "Resource Mgmt": 0.5308740465883323
+        },
+        "js": {
+          "Injection": 0.4920713477698772,
+          "Info Disclosure": 0.33793103448275863,
+          "Access Control": 0.43758309591642924,
+          "Resource Mgmt": 0.5240118577075099
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.522856431304531,
+          "ci_lo": 0.5046036065327225,
+          "ci_hi": 0.5397460549183056,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.5081799451719645,
+          "ci_lo": 0.4868749945441724,
+          "ci_hi": 0.5283071202059457,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3464302848021377,
+          "ci_lo": 0.31443651946605217,
+          "ci_hi": 0.37832273100837444,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.16999751898605117,
+          "ci_lo": 0.12489025421936002,
+          "ci_hi": 0.21836293859649122,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.540998817966903,
+          "Resource Mgmt": 0.5306800238203022,
+          "Info Disclosure": 0.594669830604881
+        },
+        "Access Control": {
+          "Memory Safety": 0.540998817966903,
+          "Access Control": null,
+          "Resource Mgmt": 0.5058510638297872,
+          "Info Disclosure": 0.5902894736842106
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5306800238203022,
+          "Access Control": 0.5058510638297872,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5585796939156402
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.594669830604881,
+          "Access Control": 0.5902894736842106,
+          "Resource Mgmt": 0.5585796939156402,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "23": {
+      "raw_cwe": {
+        "Memory Safety": 0.5637484412795448,
+        "Injection": 0.6642044355576465,
+        "Info Disclosure": 0.530615763546798,
+        "Access Control": 0.5237168335542887,
+        "Resource Mgmt": 0.5688532064176207
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.49865191253114205,
+        "Injection": 0.5006459700114135,
+        "Info Disclosure": 0.509103867519128,
+        "Access Control": 0.5095646085141879,
+        "Resource Mgmt": 0.533071673693317
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5081912048452346,
+          "Injection": 0.3589353048911873,
+          "Info Disclosure": 0.5421975736005136,
+          "Access Control": 0.48467234128355796,
+          "Resource Mgmt": 0.526498453670671
+        },
+        "php": {
+          "Injection": 0.6066418142280211,
+          "Info Disclosure": 0.5696454339311483,
+          "Access Control": 0.583451536643026,
+          "Resource Mgmt": 0.6016635745207174
+        },
+        "js": {
+          "Injection": 0.5018523755656109,
+          "Info Disclosure": 0.4482758620689656,
+          "Access Control": 0.5485280151946819,
+          "Resource Mgmt": 0.47559288537549416
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.4970294298203777,
+          "ci_lo": 0.4806847907949122,
+          "ci_hi": 0.5113366875522855,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.4989391399721066,
+          "ci_lo": 0.47718626239014494,
+          "ci_hi": 0.5179331217716692,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3494932091264347,
+          "ci_lo": 0.31484321731112125,
+          "ci_hi": 0.38346767247060404,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.1663814353922387,
+          "ci_lo": 0.12427562682127247,
+          "ci_hi": 0.21036840633462853,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.506392828999212,
+          "Resource Mgmt": 0.5145864171582823,
+          "Info Disclosure": 0.5612701967685171
+        },
+        "Access Control": {
+          "Memory Safety": 0.506392828999212,
+          "Access Control": null,
+          "Resource Mgmt": 0.6041578014184397,
+          "Info Disclosure": 0.6408684210526315
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5145864171582823,
+          "Access Control": 0.6041578014184397,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5475550578574094
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5612701967685171,
+          "Access Control": 0.6408684210526315,
+          "Resource Mgmt": 0.5475550578574094,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "27": {
+      "raw_cwe": {
+        "Memory Safety": 0.5771726266484205,
+        "Injection": 0.6482093320090261,
+        "Info Disclosure": 0.52644586521329,
+        "Access Control": 0.5184877996530444,
+        "Resource Mgmt": 0.5375506846663765
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.48841090102178075,
+        "Injection": 0.4691717199438911,
+        "Info Disclosure": 0.5368310449638403,
+        "Access Control": 0.5108781156609707,
+        "Resource Mgmt": 0.5173341565653584
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5467891053832055,
+          "Injection": 0.7276004632622278,
+          "Info Disclosure": 0.5217842487181362,
+          "Access Control": 0.490919604793179,
+          "Resource Mgmt": 0.5426494491249286
+        },
+        "php": {
+          "Injection": 0.5684958061509786,
+          "Info Disclosure": 0.5230715316429602,
+          "Access Control": 0.5883687943262411,
+          "Resource Mgmt": 0.41658420944135227
+        },
+        "js": {
+          "Injection": 0.4045875080801552,
+          "Info Disclosure": 0.47241379310344833,
+          "Access Control": 0.5229344729344729,
+          "Resource Mgmt": 0.41264822134387347
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.4888580931381205,
+          "ci_lo": 0.47396153233633764,
+          "ci_hi": 0.5051731396231665,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.48792991395678686,
+          "ci_lo": 0.46619053806024435,
+          "ci_hi": 0.5113178674574381,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3398655363823482,
+          "ci_lo": 0.30681879658311645,
+          "ci_hi": 0.37394351078806803,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.1566676794756355,
+          "ci_lo": 0.11736099492877902,
+          "ci_hi": 0.20192999817999818,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.4923778565799843,
+          "Resource Mgmt": 0.5217242443730674,
+          "Info Disclosure": 0.5559302511598144
+        },
+        "Access Control": {
+          "Memory Safety": 0.4923778565799843,
+          "Access Control": null,
+          "Resource Mgmt": 0.5502570921985815,
+          "Info Disclosure": 0.4881842105263158
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5217242443730674,
+          "Access Control": 0.5502570921985815,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5247760358342666
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5559302511598144,
+          "Access Control": 0.4881842105263158,
+          "Resource Mgmt": 0.5247760358342666,
+          "Info Disclosure": null
+        }
+      }
+    }
+  },
+  "Qwen-STD-SAE": {
+    "0": {
+      "raw_cwe": {
+        "Memory Safety": 0.5313795384729794,
+        "Injection": 0.5476321693370624,
+        "Info Disclosure": 0.46755790797610314,
+        "Access Control": 0.5014014028384356,
+        "Resource Mgmt": 0.5275991334595631
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.6715595259282141,
+        "Injection": 0.7295335955809963,
+        "Info Disclosure": 0.5574981658107117,
+        "Access Control": 0.6252285134153386,
+        "Resource Mgmt": 0.5818013301717395
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5308701110330327,
+          "Injection": 0.4351392480068951,
+          "Info Disclosure": 0.5198935910874918,
+          "Access Control": 0.5543410819218805,
+          "Resource Mgmt": 0.5474153572877172
+        },
+        "php": {
+          "Injection": 0.5099707983845916,
+          "Info Disclosure": 0.4285384456813028,
+          "Access Control": 0.5315839243498819,
+          "Resource Mgmt": 0.4706782106782107
+        },
+        "js": {
+          "Injection": 0.5357890271493212,
+          "Info Disclosure": 0.31034482758620696,
+          "Access Control": 0.41070750237416903,
+          "Resource Mgmt": 0.525098814229249
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.46824932534551605,
+          "ci_lo": 0.45145452407256664,
+          "ci_hi": 0.48357633631783603,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.42097976095771533,
+          "ci_lo": 0.3980142277106842,
+          "ci_hi": 0.4423981447740526,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.38088626356854915,
+          "ci_lo": 0.34247526476995555,
+          "ci_hi": 0.4139537331130166,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.16147235842260496,
+          "ci_lo": 0.12119556114283776,
+          "ci_hi": 0.21231876343623543,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5086234943149837,
+          "Resource Mgmt": 0.5616403837954879,
+          "Info Disclosure": 0.4806585909217488
+        },
+        "Access Control": {
+          "Memory Safety": 0.5086234943149837,
+          "Access Control": null,
+          "Resource Mgmt": 0.424645390070922,
+          "Info Disclosure": 0.5963421052631579
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5616403837954879,
+          "Access Control": 0.424645390070922,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5237709966405375
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.4806585909217488,
+          "Access Control": 0.5963421052631579,
+          "Resource Mgmt": 0.5237709966405375,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "3": {
+      "raw_cwe": {
+        "Memory Safety": 0.5543569830549269,
+        "Injection": 0.6040444731958494,
+        "Info Disclosure": 0.5179551409705482,
+        "Access Control": 0.5183318785074894,
+        "Resource Mgmt": 0.5254553252065591
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.6174913726930906,
+        "Injection": 0.7344500422558526,
+        "Info Disclosure": 0.5395084372707263,
+        "Access Control": 0.5735610452615593,
+        "Resource Mgmt": 0.572771959013068
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5067915278157005,
+          "Injection": 0.3977806507218272,
+          "Info Disclosure": 0.45836498378879115,
+          "Access Control": 0.4953841168337367,
+          "Resource Mgmt": 0.46268894338931943
+        },
+        "php": {
+          "Injection": 0.5746915191053122,
+          "Info Disclosure": 0.3922201607915893,
+          "Access Control": 0.5266193853427896,
+          "Resource Mgmt": 0.49240568954854663
+        },
+        "js": {
+          "Injection": 0.4979092598577893,
+          "Info Disclosure": 0.4896551724137931,
+          "Access Control": 0.481244064577398,
+          "Resource Mgmt": 0.5084486166007904
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.49912680148912947,
+          "ci_lo": 0.48373455372204993,
+          "ci_hi": 0.5134042472264639,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.471939987514734,
+          "ci_lo": 0.4503723940088366,
+          "ci_hi": 0.4930215914292523,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.4232531497245196,
+          "ci_lo": 0.3862917164677143,
+          "ci_hi": 0.46037411637518605,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.22245012094925737,
+          "ci_lo": 0.17390117120673773,
+          "ci_hi": 0.27071912002657866,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5213466734211416,
+          "Resource Mgmt": 0.5525537289132242,
+          "Info Disclosure": 0.5471109215118174
+        },
+        "Access Control": {
+          "Memory Safety": 0.5213466734211416,
+          "Access Control": null,
+          "Resource Mgmt": 0.5109219858156029,
+          "Info Disclosure": 0.42671052631578954
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5525537289132242,
+          "Access Control": 0.5109219858156029,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.4816181410974244
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5471109215118174,
+          "Access Control": 0.42671052631578954,
+          "Resource Mgmt": 0.4816181410974244,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "7": {
+      "raw_cwe": {
+        "Memory Safety": 0.5648232189706682,
+        "Injection": 0.603132574470495,
+        "Info Disclosure": 0.5950188659469658,
+        "Access Control": 0.4436508869848982,
+        "Resource Mgmt": 0.5130223375961147
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.47697893613992,
+        "Injection": 0.6252412286433693,
+        "Info Disclosure": 0.5603767948852321,
+        "Access Control": 0.5243586368146367,
+        "Resource Mgmt": 0.5357564402984638
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5429026142866846,
+          "Injection": 0.4886352617970265,
+          "Info Disclosure": 0.5516550872317432,
+          "Access Control": 0.5913165399239544,
+          "Resource Mgmt": 0.5022751902169631
+        },
+        "php": {
+          "Injection": 0.5193774464119292,
+          "Info Disclosure": 0.5634343434343434,
+          "Access Control": 0.5069267139479906,
+          "Resource Mgmt": 0.5008142650999794
+        },
+        "js": {
+          "Injection": 0.5134433581124757,
+          "Info Disclosure": 0.5,
+          "Access Control": 0.3873219373219373,
+          "Resource Mgmt": 0.5060276679841896
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.46927948368576483,
+          "ci_lo": 0.4527424967263027,
+          "ci_hi": 0.4866896236290237,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.4180482722823697,
+          "ci_lo": 0.3966771461290322,
+          "ci_hi": 0.4404918245535432,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3728626219256064,
+          "ci_lo": 0.3420458590476707,
+          "ci_hi": 0.40597164304873995,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.18821077141495,
+          "ci_lo": 0.14434500732316707,
+          "ci_hi": 0.23472551936177458,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.6186606439266014,
+          "Resource Mgmt": 0.5287673263058053,
+          "Info Disclosure": 0.5668229823968906
+        },
+        "Access Control": {
+          "Memory Safety": 0.6186606439266014,
+          "Access Control": null,
+          "Resource Mgmt": 0.5149911347517732,
+          "Info Disclosure": 0.6000263157894737
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5287673263058053,
+          "Access Control": 0.5149911347517732,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5328975363941769
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5668229823968906,
+          "Access Control": 0.6000263157894737,
+          "Resource Mgmt": 0.5328975363941769,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "11": {
+      "raw_cwe": {
+        "Memory Safety": 0.5678086995330618,
+        "Injection": 0.6230453183129026,
+        "Info Disclosure": 0.5020972644376899,
+        "Access Control": 0.44759473936023675,
+        "Resource Mgmt": 0.5271647187186452
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5088265780482074,
+        "Injection": 0.4845761999355272,
+        "Info Disclosure": 0.4668693009118541,
+        "Access Control": 0.48389131651206796,
+        "Resource Mgmt": 0.5382915562687662
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5200342393816068,
+          "Injection": 0.3769823313940961,
+          "Info Disclosure": 0.48760256941566515,
+          "Access Control": 0.567039837538887,
+          "Resource Mgmt": 0.4893206073422546
+        },
+        "php": {
+          "Injection": 0.6285430257844051,
+          "Info Disclosure": 0.5801443001443001,
+          "Access Control": 0.5432624113475177,
+          "Resource Mgmt": 0.4175510204081633
+        },
+        "js": {
+          "Injection": 0.40750444408532643,
+          "Info Disclosure": 0.3068965517241379,
+          "Access Control": 0.3891500474833808,
+          "Resource Mgmt": 0.45770750988142284
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.49949561338978676,
+          "ci_lo": 0.4842088650075858,
+          "ci_hi": 0.5123063526615494,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.4699696627577614,
+          "ci_lo": 0.4478497089528155,
+          "ci_hi": 0.4927044865879202,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3353123541602738,
+          "ci_lo": 0.30175702684101924,
+          "ci_hi": 0.3714504438072423,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.22005976249384407,
+          "ci_lo": 0.17232501982501983,
+          "ci_hi": 0.268876817861541,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.4733167285826861,
+          "Resource Mgmt": 0.5388883499680241,
+          "Info Disclosure": 0.5063753058769856
+        },
+        "Access Control": {
+          "Memory Safety": 0.4733167285826861,
+          "Access Control": null,
+          "Resource Mgmt": 0.5008333333333334,
+          "Info Disclosure": 0.48855263157894735
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5388883499680241,
+          "Access Control": 0.5008333333333334,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.4941293393057111
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5063753058769856,
+          "Access Control": 0.48855263157894735,
+          "Resource Mgmt": 0.4941293393057111,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "15": {
+      "raw_cwe": {
+        "Memory Safety": 0.5774081091176354,
+        "Injection": 0.6425384223320003,
+        "Info Disclosure": 0.5380222198930931,
+        "Access Control": 0.4882783344485979,
+        "Resource Mgmt": 0.5708298565638165
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5135654302943475,
+        "Injection": 0.4938293604119292,
+        "Info Disclosure": 0.5288376480452783,
+        "Access Control": 0.5083397998572181,
+        "Resource Mgmt": 0.5468102570483178
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5421623124482077,
+          "Injection": 0.4215363068304245,
+          "Info Disclosure": 0.5758068225217977,
+          "Access Control": 0.5030241099204977,
+          "Resource Mgmt": 0.5341871184981383
+        },
+        "php": {
+          "Injection": 0.536354147250699,
+          "Info Disclosure": 0.45458462172747893,
+          "Access Control": 0.4653900709219857,
+          "Resource Mgmt": 0.4825664811379097
+        },
+        "js": {
+          "Injection": 0.451234243697479,
+          "Info Disclosure": 0.4482758620689656,
+          "Access Control": 0.42903608736942067,
+          "Resource Mgmt": 0.5714426877470355
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.5379364628359551,
+          "ci_lo": 0.5199024277917415,
+          "ci_hi": 0.5541935178508358,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.48160704325245934,
+          "ci_lo": 0.45814483468950806,
+          "ci_hi": 0.5015498332422841,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3630251910329605,
+          "ci_lo": 0.3305624328051685,
+          "ci_hi": 0.3989355002559887,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.18888120954301868,
+          "ci_lo": 0.14138467159366003,
+          "ci_hi": 0.23998419173662933,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.4804871664978048,
+          "Resource Mgmt": 0.5715597088390207,
+          "Info Disclosure": 0.5515326881032367
+        },
+        "Access Control": {
+          "Memory Safety": 0.4804871664978048,
+          "Access Control": null,
+          "Resource Mgmt": 0.43807624113475174,
+          "Info Disclosure": 0.5511842105263158
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5715597088390207,
+          "Access Control": 0.43807624113475174,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5229656588279209
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5515326881032367,
+          "Access Control": 0.5511842105263158,
+          "Resource Mgmt": 0.5229656588279209,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "19": {
+      "raw_cwe": {
+        "Memory Safety": 0.5718125024232521,
+        "Injection": 0.63142434895493,
+        "Info Disclosure": 0.5633890577507599,
+        "Access Control": 0.5112312594482831,
+        "Resource Mgmt": 0.5108650941645572
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.5090742395437866,
+        "Injection": 0.49917472577258515,
+        "Info Disclosure": 0.5196425951158159,
+        "Access Control": 0.49523655450741666,
+        "Resource Mgmt": 0.5165265982505423
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5517594086400297,
+          "Injection": 0.214332848524025,
+          "Info Disclosure": 0.608745439327824,
+          "Access Control": 0.5038424645696509,
+          "Resource Mgmt": 0.5011717534964005
+        },
+        "php": {
+          "Injection": 0.596506989748369,
+          "Info Disclosure": 0.5407215007215008,
+          "Access Control": 0.5193144208037825,
+          "Resource Mgmt": 0.47577406720263865
+        },
+        "js": {
+          "Injection": 0.5342214770523593,
+          "Info Disclosure": 0.23448275862068968,
+          "Access Control": 0.4517806267806267,
+          "Resource Mgmt": 0.5805335968379447
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.5554239761716255,
+          "ci_lo": 0.5381267980057947,
+          "ci_hi": 0.5704629275601026,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.5189132777058431,
+          "ci_lo": 0.4992299409041432,
+          "ci_hi": 0.5411828752130617,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.3976977187160979,
+          "ci_lo": 0.36484892394239943,
+          "ci_hi": 0.4330734990196323,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.19050195893971653,
+          "ci_lo": 0.14732592560317487,
+          "ci_hi": 0.23486928729938472,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5339285714285713,
+          "Resource Mgmt": 0.5141225185688179,
+          "Info Disclosure": 0.5523791600751288
+        },
+        "Access Control": {
+          "Memory Safety": 0.5339285714285713,
+          "Access Control": null,
+          "Resource Mgmt": 0.5062234042553191,
+          "Info Disclosure": 0.5883421052631579
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5141225185688179,
+          "Access Control": 0.5062234042553191,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.587389884285181
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5523791600751288,
+          "Access Control": 0.5883421052631579,
+          "Resource Mgmt": 0.587389884285181,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "23": {
+      "raw_cwe": {
+        "Memory Safety": 0.559645896774866,
+        "Injection": 0.6464746203507671,
+        "Info Disclosure": 0.5221318520071271,
+        "Access Control": 0.4592520364065688,
+        "Resource Mgmt": 0.5407812336330627
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.49946401727622447,
+        "Injection": 0.5404427498540649,
+        "Info Disclosure": 0.5087941515564406,
+        "Access Control": 0.4726249616300063,
+        "Resource Mgmt": 0.5185892796659962
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5180906030563305,
+          "Injection": 0.4060668498168498,
+          "Info Disclosure": 0.5457356800988112,
+          "Access Control": 0.46046419518377685,
+          "Resource Mgmt": 0.5443679528344325
+        },
+        "php": {
+          "Injection": 0.6002336129232682,
+          "Info Disclosure": 0.4912966398680684,
+          "Access Control": 0.5537352245862884,
+          "Resource Mgmt": 0.5571222428365286
+        },
+        "js": {
+          "Injection": 0.5582356981254041,
+          "Info Disclosure": 0.3551724137931035,
+          "Access Control": 0.4737179487179487,
+          "Resource Mgmt": 0.5805335968379447
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.5004722074443875,
+          "ci_lo": 0.48594465655456376,
+          "ci_hi": 0.5159967510172386,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.4958205594533437,
+          "ci_lo": 0.4745700990351317,
+          "ci_hi": 0.5159474330664741,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.35045124499535885,
+          "ci_lo": 0.3154152731587122,
+          "ci_hi": 0.38604969659277294,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.1790205136627069,
+          "ci_lo": 0.1359842995169082,
+          "ci_hi": 0.2237896074774979,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.5090906788247214,
+          "Resource Mgmt": 0.5362065974093475,
+          "Info Disclosure": 0.5772408859027001
+        },
+        "Access Control": {
+          "Memory Safety": 0.5090906788247214,
+          "Access Control": null,
+          "Resource Mgmt": 0.594991134751773,
+          "Info Disclosure": 0.5847105263157896
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5362065974093475,
+          "Access Control": 0.594991134751773,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.5567665173572228
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5772408859027001,
+          "Access Control": 0.5847105263157896,
+          "Resource Mgmt": 0.5567665173572228,
+          "Info Disclosure": null
+        }
+      }
+    },
+    "27": {
+      "raw_cwe": {
+        "Memory Safety": 0.5568836632451937,
+        "Injection": 0.6359518239717017,
+        "Info Disclosure": 0.5240933864374803,
+        "Access Control": 0.5048166609155377,
+        "Resource Mgmt": 0.5347404778653871
+      },
+      "resid_cwe": {
+        "Memory Safety": 0.4886230473885341,
+        "Injection": 0.4727751422323288,
+        "Info Disclosure": 0.5075662928414213,
+        "Access Control": 0.4968098640950555,
+        "Resource Mgmt": 0.510731594456736
+      },
+      "within": {
+        "c": {
+          "Memory Safety": 0.5201588329542604,
+          "Injection": 0.7122185412626589,
+          "Info Disclosure": 0.5096858519620031,
+          "Access Control": 0.4825076333678995,
+          "Resource Mgmt": 0.5202167715801107
+        },
+        "php": {
+          "Injection": 0.5482124883504194,
+          "Info Disclosure": 0.45328385899814466,
+          "Access Control": 0.5627659574468085,
+          "Resource Mgmt": 0.49239538239538233
+        },
+        "js": {
+          "Injection": 0.40055147058823526,
+          "Info Disclosure": 0.47241379310344833,
+          "Access Control": 0.41939696106362767,
+          "Resource Mgmt": 0.4438735177865613
+        }
+      },
+      "vuln_sec": {
+        "global": {
+          "roc_auc": 0.4701680911815041,
+          "ci_lo": 0.45433640909928785,
+          "ci_hi": 0.4866147144444278,
+          "n": 2493
+        },
+        "c_only": {
+          "roc_auc": 0.46647069092611637,
+          "ci_lo": 0.44468559952483716,
+          "ci_hi": 0.48890997628179467,
+          "n": 1368
+        },
+        "php_only": {
+          "roc_auc": 0.34401722325951756,
+          "ci_lo": 0.3089085793634793,
+          "ci_hi": 0.3775425991764872,
+          "n": 518
+        },
+        "js_only": {
+          "roc_auc": 0.17611008121634064,
+          "ci_lo": 0.12938107559340659,
+          "ci_hi": 0.2219916520009017,
+          "n": 151
+        }
+      },
+      "pairwise_c": {
+        "Memory Safety": {
+          "Memory Safety": null,
+          "Access Control": 0.4896591804570528,
+          "Resource Mgmt": 0.5043767110737459,
+          "Info Disclosure": 0.5455443869721586
+        },
+        "Access Control": {
+          "Memory Safety": 0.4896591804570528,
+          "Access Control": null,
+          "Resource Mgmt": 0.5012234042553192,
+          "Info Disclosure": 0.4903947368421052
+        },
+        "Resource Mgmt": {
+          "Memory Safety": 0.5043767110737459,
+          "Access Control": 0.5012234042553192,
+          "Resource Mgmt": null,
+          "Info Disclosure": 0.571031168346398
+        },
+        "Info Disclosure": {
+          "Memory Safety": 0.5455443869721586,
+          "Access Control": 0.4903947368421052,
+          "Resource Mgmt": 0.571031168346398,
+          "Info Disclosure": null
+        }
+      }
+    }
+  }
+}
