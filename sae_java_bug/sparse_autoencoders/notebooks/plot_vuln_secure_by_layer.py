@@ -88,7 +88,7 @@ def make_figure(cache):
         ax.set_xlabel("Layer")
         ax.set_ylabel("ROC-AUC  (vuln vs. secure)")
         ax.set_title(RUN_TITLES.get(run_name, run_name), fontweight="bold")
-        ax.set_ylim(0.40, 0.65)
+        ax.set_ylim(0.00, 0.75)
         ax.legend(fontsize=7)
 
     fig.suptitle(
