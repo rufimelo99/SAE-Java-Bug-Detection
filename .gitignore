@@ -200,3 +200,5 @@ cython_debug/
 *DS_Store
 /.claude
 /sae_java_bug/artifacts/activations/token_pca_3d
+sae_java_bug/artifacts/multi_model_probing/activations_starcoder2-7b.npz
+sae_java_bug/artifacts/multi_model_probing/activations_codellama-7b.npz
