@@ -78,10 +78,6 @@ RUNS_REGISTRY = [
         "run_dir": ARTIFACTS / "TO_UPLOAD",
         "label":   "SAE features (STD)",
     },
-    {
-        "run_dir": ARTIFACTS / "TOPK",
-        "label":   "SAE features (TopK)",
-    },
 ]
 
 PROBE_STYLES = {

@@ -81,10 +81,6 @@ RUNS_REGISTRY = [
         "run_dir": ARTIFACTS / "TO_UPLOAD",
         "label":   "Qwen-STD-SAE",
     },
-    {
-        "run_dir": ARTIFACTS / "TOPK",
-        "label":   "Qwen-TopK-SAE",
-    },
 ]
 
 

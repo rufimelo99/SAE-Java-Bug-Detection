@@ -1,0 +1,259 @@
+{
+  "layer": 11,
+  "min_samples": 30,
+  "n_cwes_analysed": 25,
+  "max_abs_delta": 0.009832,
+  "all_below_0.01": true,
+  "results": [
+    {
+      "cwe": "CWE-401",
+      "n_samples": 71,
+      "top_feature": 14201,
+      "enrichment_ratio": 3.5098,
+      "vuln_mean": 0.045293,
+      "secure_mean": 0.055124,
+      "vuln_secure_delta": -0.009832,
+      "abs_delta": 0.009832
+    },
+    {
+      "cwe": "CWE-362",
+      "n_samples": 71,
+      "top_feature": 9669,
+      "enrichment_ratio": 2.7414,
+      "vuln_mean": 0.13102,
+      "secure_mean": 0.124562,
+      "vuln_secure_delta": 0.006457,
+      "abs_delta": 0.006457
+    },
+    {
+      "cwe": "CWE-79",
+      "n_samples": 387,
+      "top_feature": 15980,
+      "enrichment_ratio": 2.8376,
+      "vuln_mean": 0.079243,
+      "secure_mean": 0.083988,
+      "vuln_secure_delta": -0.004745,
+      "abs_delta": 0.004745
+    },
+    {
+      "cwe": "CWE-434",
+      "n_samples": 31,
+      "top_feature": 6802,
+      "enrichment_ratio": 10.0816,
+      "vuln_mean": 0.005719,
+      "secure_mean": 0.00809,
+      "vuln_secure_delta": -0.002372,
+      "abs_delta": 0.002372
+    },
+    {
+      "cwe": "CWE-369",
+      "n_samples": 53,
+      "top_feature": 2118,
+      "enrichment_ratio": 5.8756,
+      "vuln_mean": 0.059227,
+      "secure_mean": 0.057601,
+      "vuln_secure_delta": 0.001626,
+      "abs_delta": 0.001626
+    },
+    {
+      "cwe": "CWE-120",
+      "n_samples": 42,
+      "top_feature": 13450,
+      "enrichment_ratio": 10.3448,
+      "vuln_mean": 0.001565,
+      "secure_mean": 0.000306,
+      "vuln_secure_delta": 0.00126,
+      "abs_delta": 0.00126
+    },
+    {
+      "cwe": "CWE-189",
+      "n_samples": 36,
+      "top_feature": 8708,
+      "enrichment_ratio": 14.2923,
+      "vuln_mean": 0.005863,
+      "secure_mean": 0.00509,
+      "vuln_secure_delta": 0.000773,
+      "abs_delta": 0.000773
+    },
+    {
+      "cwe": "CWE-94",
+      "n_samples": 32,
+      "top_feature": 14755,
+      "enrichment_ratio": 8.6263,
+      "vuln_mean": 0.003513,
+      "secure_mean": 0.002777,
+      "vuln_secure_delta": 0.000735,
+      "abs_delta": 0.000735
+    },
+    {
+      "cwe": "CWE-416",
+      "n_samples": 112,
+      "top_feature": 12459,
+      "enrichment_ratio": 2.7642,
+      "vuln_mean": 0.003151,
+      "secure_mean": 0.00384,
+      "vuln_secure_delta": -0.000689,
+      "abs_delta": 0.000689
+    },
+    {
+      "cwe": "CWE-787",
+      "n_samples": 166,
+      "top_feature": 5805,
+      "enrichment_ratio": 5.2225,
+      "vuln_mean": 0.000964,
+      "secure_mean": 0.001595,
+      "vuln_secure_delta": -0.000631,
+      "abs_delta": 0.000631
+    },
+    {
+      "cwe": "CWE-22",
+      "n_samples": 76,
+      "top_feature": 8699,
+      "enrichment_ratio": 5.9926,
+      "vuln_mean": 0.004273,
+      "secure_mean": 0.004854,
+      "vuln_secure_delta": -0.000581,
+      "abs_delta": 0.000581
+    },
+    {
+      "cwe": "CWE-190",
+      "n_samples": 79,
+      "top_feature": 7375,
+      "enrichment_ratio": 5.4446,
+      "vuln_mean": 0.003759,
+      "secure_mean": 0.004168,
+      "vuln_secure_delta": -0.000408,
+      "abs_delta": 0.000408
+    },
+    {
+      "cwe": "CWE-119",
+      "n_samples": 224,
+      "top_feature": 7252,
+      "enrichment_ratio": 2.8052,
+      "vuln_mean": 0.002563,
+      "secure_mean": 0.00218,
+      "vuln_secure_delta": 0.000383,
+      "abs_delta": 0.000383
+    },
+    {
+      "cwe": "CWE-20",
+      "n_samples": 167,
+      "top_feature": 12831,
+      "enrichment_ratio": 5.0664,
+      "vuln_mean": 0.00025,
+      "secure_mean": 0.000569,
+      "vuln_secure_delta": -0.000319,
+      "abs_delta": 0.000319
+    },
+    {
+      "cwe": "CWE-78",
+      "n_samples": 40,
+      "top_feature": 12659,
+      "enrichment_ratio": 19.5556,
+      "vuln_mean": 0.007935,
+      "secure_mean": 0.007624,
+      "vuln_secure_delta": 0.000312,
+      "abs_delta": 0.000312
+    },
+    {
+      "cwe": "CWE-399",
+      "n_samples": 61,
+      "top_feature": 10884,
+      "enrichment_ratio": 3.3689,
+      "vuln_mean": 0.011195,
+      "secure_mean": 0.010897,
+      "vuln_secure_delta": 0.000298,
+      "abs_delta": 0.000298
+    },
+    {
+      "cwe": "CWE-415",
+      "n_samples": 35,
+      "top_feature": 12659,
+      "enrichment_ratio": 5.0614,
+      "vuln_mean": 0.002054,
+      "secure_mean": 0.001831,
+      "vuln_secure_delta": 0.000222,
+      "abs_delta": 0.000222
+    },
+    {
+      "cwe": "CWE-352",
+      "n_samples": 30,
+      "top_feature": 16103,
+      "enrichment_ratio": 10.4364,
+      "vuln_mean": 0.004406,
+      "secure_mean": 0.004206,
+      "vuln_secure_delta": 0.000199,
+      "abs_delta": 0.000199
+    },
+    {
+      "cwe": "CWE-264",
+      "n_samples": 51,
+      "top_feature": 14247,
+      "enrichment_ratio": 6.4935,
+      "vuln_mean": 0.007172,
+      "secure_mean": 0.007339,
+      "vuln_secure_delta": -0.000167,
+      "abs_delta": 0.000167
+    },
+    {
+      "cwe": "CWE-400",
+      "n_samples": 65,
+      "top_feature": 3862,
+      "enrichment_ratio": 10.9463,
+      "vuln_mean": 0.009794,
+      "secure_mean": 0.00963,
+      "vuln_secure_delta": 0.000165,
+      "abs_delta": 0.000165
+    },
+    {
+      "cwe": "CWE-125",
+      "n_samples": 220,
+      "top_feature": 1406,
+      "enrichment_ratio": 3.2695,
+      "vuln_mean": 0.001172,
+      "secure_mean": 0.001319,
+      "vuln_secure_delta": -0.000147,
+      "abs_delta": 0.000147
+    },
+    {
+      "cwe": "CWE-287",
+      "n_samples": 37,
+      "top_feature": 13067,
+      "enrichment_ratio": 5.918,
+      "vuln_mean": 0.001519,
+      "secure_mean": 0.001417,
+      "vuln_secure_delta": 0.000102,
+      "abs_delta": 0.000102
+    },
+    {
+      "cwe": "CWE-89",
+      "n_samples": 84,
+      "top_feature": 10377,
+      "enrichment_ratio": 11.334,
+      "vuln_mean": 0.001481,
+      "secure_mean": 0.00145,
+      "vuln_secure_delta": 3e-05,
+      "abs_delta": 3e-05
+    },
+    {
+      "cwe": "CWE-476",
+      "n_samples": 180,
+      "top_feature": 506,
+      "enrichment_ratio": 3.8577,
+      "vuln_mean": 0.002106,
+      "secure_mean": 0.002087,
+      "vuln_secure_delta": 1.9e-05,
+      "abs_delta": 1.9e-05
+    },
+    {
+      "cwe": "CWE-200",
+      "n_samples": 143,
+      "top_feature": 12831,
+      "enrichment_ratio": 5.144,
+      "vuln_mean": 0.000254,
+      "secure_mean": 0.000268,
+      "vuln_secure_delta": -1.4e-05,
+      "abs_delta": 1.4e-05
+    }
+  ]
+}

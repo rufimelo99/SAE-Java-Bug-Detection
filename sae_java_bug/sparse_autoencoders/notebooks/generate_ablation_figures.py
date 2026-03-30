@@ -257,9 +257,11 @@ def fig_ablation_l11():
 
 def fig_pairwise_auc():
     """
-    Three-panel figure: pairwise ΔAUC = AUC_residualised − AUC_raw for all
-    5×5 family pairs at three representative layers.
+    Two-panel figure: pairwise ΔAUC = AUC_residualised − AUC_raw for all
+    5×5 family pairs at Raw L11 and SAE L11.
     Blue = language suppresses CWE signal (positive); red = language confound (negative).
+    SAE L0 omitted: its all-positive values are a residualisation artefact, not
+    genuine language-independent CWE structure.
     """
     FAM_SHORT = ["Mem. Safety", "Injection", "Info Disc.", "Acc. Control", "Res. Mgmt"]
 
@@ -272,13 +274,6 @@ def fig_pairwise_auc():
             [ 0.077, -0.066,  0.017, np.nan,  0.093],
             [ 0.057, -0.094,  0.043,  0.093, np.nan],
         ]),
-        "SAE L0": np.array([
-            [np.nan,  0.381,  0.175,  0.234,  0.116],
-            [ 0.381, np.nan,  0.282,  0.174,  0.296],
-            [ 0.175,  0.282, np.nan,  0.090,  0.094],
-            [ 0.234,  0.174,  0.090, np.nan,  0.175],
-            [ 0.116,  0.296,  0.094,  0.175, np.nan],
-        ]),
         "SAE L11": np.array([
             [np.nan, -0.092,  0.053,  0.075,  0.010],
             [-0.092, np.nan, -0.019, -0.059, -0.073],
@@ -290,8 +285,8 @@ def fig_pairwise_auc():
 
     vmax = 0.40  # symmetric colorscale
 
-    fig, axes = plt.subplots(1, 3, figsize=(6.75, 2.5))
-    fig.subplots_adjust(left=0.15, right=0.88, wspace=0.08)
+    fig, axes = plt.subplots(1, 2, figsize=(4.75, 2.5))
+    fig.subplots_adjust(left=0.18, right=0.88, wspace=0.08)
 
     for idx, (title, mat) in enumerate(PAIRWISE_DELTA.items()):
         ax = axes[idx]

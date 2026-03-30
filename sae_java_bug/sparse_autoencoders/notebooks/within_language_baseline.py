@@ -104,13 +104,29 @@ RUNS_REGISTRY = [
         "kind":        "sae",
         "min_samples": 100,
     },
-    {
-        "run_dir":     ARTIFACTS / "TOPK",
-        "label":       "Qwen-TopK-SAE",
-        "kind":        "sae",
-        "min_samples": 100,
-    },
 ]
+
+CACHE_FILE = ARTIFACTS / "within_lang_probe_cache.json"
+
+
+class _NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.floating, np.integer)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+def save_cache(data):
+    with CACHE_FILE.open("w") as f:
+        json.dump(data, f, indent=2, cls=_NpEncoder)
+    print(f"Results cached → {CACHE_FILE}")
+
+
+def load_cache():
+    with CACHE_FILE.open() as f:
+        return json.load(f)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -310,43 +326,114 @@ def pairwise_family_probe(delta, meta, families, n_components=50, cv=5):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Compute all probes once → JSON-serialisable cache
+# ─────────────────────────────────────────────────────────────────────────────
+
+C_FAMILIES = ["Memory Safety", "Access Control", "Resource Mgmt", "Info Disclosure"]
+
+
+def compute_all(layers_data):
+    """
+    Run every probe needed by all figures and return a JSON-serialisable dict.
+
+    Structure:
+      cache[run_name][str(layer)] = {
+          "raw_cwe":    {family: float},
+          "resid_cwe":  {family: float},
+          "within":     {ext: {family: float} | null},
+          "vuln_sec":   {global/c_only/php_only/js_only: {roc_auc,ci_lo,ci_hi,n} | null},
+          "pairwise_c": {family: {family: float | null}} | null,
+      }
+    """
+    cache = {}
+
+    for label, (delta, safe_mat, vuln_mat, meta, _) in tqdm(
+        layers_data.items(), desc="Computing probes"
+    ):
+        run_name, layer_str = label.rsplit(" L", 1)
+        layer = int(layer_str)
+        if run_name not in cache:
+            cache[run_name] = {}
+
+        resid       = residualise_filetype(delta, meta)
+        raw_probe   = probe_cwe_families(delta, meta, MAIN_FAMILIES)
+        resid_probe = probe_cwe_families(resid,  meta, MAIN_FAMILIES)
+
+        # Within-language probes — one per unique ext in LANG_FAMILY_PAIRS
+        unique_exts = list(dict.fromkeys(ext for ext, _ in LANG_FAMILY_PAIRS))
+        within_probes = {
+            ext: probe_within_language(delta, meta, ext, MAIN_FAMILIES)
+            for ext in unique_exts
+        }
+
+        # Vuln vs secure
+        vuln_sec = {
+            "global":   probe_vuln_secure(safe_mat, vuln_mat, meta, ext=None),
+            "c_only":   probe_vuln_secure(safe_mat, vuln_mat, meta, ext="c"),
+            "php_only": probe_vuln_secure(safe_mat, vuln_mat, meta, ext="php"),
+            "js_only":  probe_vuln_secure(safe_mat, vuln_mat, meta, ext="js"),
+        }
+
+        # Within-C pairwise
+        pairwise = None
+        mask_c = meta["file_extension"].values == "c"
+        if mask_c.sum() >= 30:
+            d_c   = delta[mask_c]
+            m_c   = meta[mask_c].reset_index(drop=True)
+            valid = [f for f in C_FAMILIES if (m_c["family"] == f).sum() >= 5]
+            if len(valid) >= 2:
+                pw = pairwise_family_probe(d_c, m_c, valid)
+                pairwise = {
+                    fam: {
+                        fam2: (None if np.isnan(v) else float(v))
+                        for fam2, v in row.items()
+                    }
+                    for fam, row in pw.iterrows()
+                }
+
+        cache[run_name][str(layer)] = {
+            "raw_cwe":    {f: float(raw_probe.loc[f, "roc_auc"])   for f in raw_probe.index},
+            "resid_cwe":  {f: float(resid_probe.loc[f, "roc_auc"]) for f in resid_probe.index},
+            "within":     {
+                ext: ({f: float(wp.loc[f, "roc_auc"]) for f in wp.index} if wp is not None else None)
+                for ext, wp in within_probes.items()
+            },
+            "vuln_sec":   vuln_sec,
+            "pairwise_c": pairwise,
+        }
+
+    return cache
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Figure 1 — Within-language AUC across layers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig_within_lang_by_layer(layers_data):
+def fig_within_lang_by_layer(cache):
     """
     Two panels: C → Memory Safety, PHP → Injection.
     Three lines each: Raw AUC / Residualised AUC / Within-language AUC.
-    Dashed vertical at L11 (SAE training layer).
+    Accepts pre-computed cache dict from compute_all().
     """
     targets = [("c", "Memory Safety"), ("php", "Injection")]
 
-    # Collect results
-    # results[run_kind][lang_fam][layer] = {raw, resid, within}
+    # Reconstruct run_kinds from cache
     run_kinds = {}
-    for label, (delta, _s, _v, meta, _) in layers_data.items():
-        run_name, layer_str = label.rsplit(" L", 1)
-        layer = int(layer_str)
-        resid = residualise_filetype(delta, meta)
-
-        raw_probe   = probe_cwe_families(delta, meta, MAIN_FAMILIES)
-        resid_probe = probe_cwe_families(resid, meta, MAIN_FAMILIES)
-
-        if run_name not in run_kinds:
-            run_kinds[run_name] = {}
-
-        for ext, fam in targets:
-            key = (ext, fam)
-            if key not in run_kinds[run_name]:
-                run_kinds[run_name][key] = {}
-
-            within_probe = probe_within_language(delta, meta, ext, MAIN_FAMILIES)
-
-            run_kinds[run_name][key][layer] = {
-                "raw":    raw_probe["roc_auc"].get(fam, np.nan) if fam in raw_probe.index else np.nan,
-                "resid":  resid_probe["roc_auc"].get(fam, np.nan) if fam in resid_probe.index else np.nan,
-                "within": within_probe["roc_auc"].get(fam, np.nan) if (within_probe is not None and fam in within_probe.index) else np.nan,
-            }
+    for run_name, layers in cache.items():
+        run_kinds[run_name] = {}
+        for layer_str, vals in layers.items():
+            layer = int(layer_str)
+            for ext, fam in targets:
+                key = (ext, fam)
+                if key not in run_kinds[run_name]:
+                    run_kinds[run_name][key] = {}
+                raw   = vals["raw_cwe"].get(fam, float("nan"))
+                resid = vals["resid_cwe"].get(fam, float("nan"))
+                wp    = vals["within"].get(ext)
+                within = wp.get(fam, float("nan")) if wp is not None else float("nan")
+                run_kinds[run_name][key][layer] = {
+                    "raw": raw, "resid": resid, "within": within
+                }
 
     for run_name, kf_data in run_kinds.items():
         fig, axes = plt.subplots(1, len(targets), figsize=(6.75, 2.8), sharey=False)
@@ -396,38 +483,30 @@ def fig_within_lang_by_layer(layers_data):
 # Figure 2 — Scatter: within-language AUC vs residualised AUC
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig_within_vs_resid(layers_data):
+def fig_within_vs_resid(cache):
     """
     Scatter plot: x = residualised AUC, y = within-language AUC.
     Each point = one (layer, lang, family) combination.
-    Near-diagonal → Ridge residualisation was sufficient.
-    One panel per run (Raw / SAE).
+    Accepts pre-computed cache dict from compute_all().
     """
     run_points = {}
 
-    for label, (delta, _s, _v, meta, _) in layers_data.items():
-        run_name, layer_str = label.rsplit(" L", 1)
-        layer = int(layer_str)
-        resid = residualise_filetype(delta, meta)
-
-        resid_probe = probe_cwe_families(resid, meta, MAIN_FAMILIES)
-
-        if run_name not in run_points:
-            run_points[run_name] = []
-
-        for ext, fam in LANG_FAMILY_PAIRS:
-            within = probe_within_language(delta, meta, ext, MAIN_FAMILIES)
-            if within is None or fam not in within.index:
-                continue
-            if fam not in resid_probe.index:
-                continue
-            run_points[run_name].append({
-                "layer":  layer,
-                "ext":    ext,
-                "family": fam,
-                "resid":  resid_probe.loc[fam, "roc_auc"],
-                "within": within.loc[fam, "roc_auc"],
-            })
+    for run_name, layers in cache.items():
+        run_points[run_name] = []
+        for layer_str, vals in layers.items():
+            layer = int(layer_str)
+            for ext, fam in LANG_FAMILY_PAIRS:
+                resid = vals["resid_cwe"].get(fam)
+                wp    = vals["within"].get(ext)
+                if resid is None or wp is None:
+                    continue
+                within = wp.get(fam)
+                if within is None:
+                    continue
+                run_points[run_name].append({
+                    "layer": layer, "ext": ext, "family": fam,
+                    "resid": resid, "within": within,
+                })
 
     n_runs = len(run_points)
     if n_runs == 0:
@@ -477,54 +556,45 @@ def fig_within_vs_resid(layers_data):
 # Figure 3 — Within-C pairwise AUC heatmaps across layers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fig_within_c_pairwise(layers_data):
+def fig_within_c_pairwise(cache):
     """
     For C samples only, pairwise family AUC at each layer.
     One heatmap per layer, grouped by run.
-    Shows genuine CWE structure when language is held constant.
+    Accepts pre-computed cache dict from compute_all().
     """
-    # Families present in meaningful quantity in C
-    C_FAMILIES = ["Memory Safety", "Access Control", "Resource Mgmt", "Info Disclosure"]
-
-    for run_name in {label.rsplit(" L", 1)[0] for label in layers_data}:
-        run_layers = {
-            int(lbl.rsplit(" L", 1)[1]): layers_data[lbl]
-            for lbl in layers_data if lbl.startswith(run_name + " L")
-        }
-        sorted_layers = sorted(run_layers.keys())
+    for run_name, layers in cache.items():
+        sorted_layers = sorted(layers.keys(), key=int)
         n = len(sorted_layers)
         if n == 0:
             continue
 
-        ncols = (n + 1) // 2  # 4 for 8 layers
+        ncols = (n + 1) // 2
         nrows = 2
         fig, axes2d = plt.subplots(nrows, ncols, figsize=(2.2 * ncols, 2.8 * nrows))
         axes_flat = axes2d.flatten()
-        # hide any spare cells
         for spare in axes_flat[n:]:
             spare.axis("off")
 
         vmin, vmax = 0.5, 1.0
 
-        for idx, (ax, layer) in enumerate(zip(axes_flat, sorted_layers)):
-            delta, _s, _v, meta, _ = run_layers[layer]
-            mask = meta["file_extension"].values == "c"
-            if mask.sum() < 30:
+        for idx, (ax, layer_str) in enumerate(zip(axes_flat, sorted_layers)):
+            layer = int(layer_str)
+            pairwise = layers[layer_str].get("pairwise_c")
+            if pairwise is None:
                 ax.set_title(f"L{layer}\n(n<30)")
                 ax.axis("off")
                 continue
 
-            d_c   = delta[mask]
-            m_c   = meta[mask].reset_index(drop=True)
-            valid = [f for f in C_FAMILIES if (m_c["family"] == f).sum() >= 5]
+            valid = list(pairwise.keys())
             if len(valid) < 2:
                 ax.set_title(f"L{layer}\n(<2 fam)")
                 ax.axis("off")
                 continue
 
-            pw = pairwise_family_probe(d_c, m_c, valid)
-            short = [f.replace("Memory Safety", "Mem.S").replace("Access Control","Acc.C")
-                      .replace("Resource Mgmt","Res.M").replace("Info Disclosure","Info.D")
+            pw_data = [[pairwise[f1].get(f2) for f2 in valid] for f1 in valid]
+            pw = pd.DataFrame(pw_data, index=valid, columns=valid).astype(float)
+            short = [f.replace("Memory Safety", "Mem.S").replace("Access Control", "Acc.C")
+                      .replace("Resource Mgmt", "Res.M").replace("Info Disclosure", "Info.D")
                      for f in valid]
             pw.index   = short
             pw.columns = short
@@ -634,39 +704,21 @@ def probe_vuln_secure(safe_mat, vuln_mat, meta, ext=None, n_components=50, cv=5,
     return {"roc_auc": mean_auc, "ci_lo": ci_lo, "ci_hi": ci_hi, "n": int(n)}
 
 
-def fig_vuln_secure_by_layer(layers_data):
+def fig_vuln_secure_by_layer(cache):
     """
     Key figure: vulnerable vs. secure binary probe AUROC across layers.
-    Two lines per panel: global (all files) and within-C.
-    One panel per run (Raw / SAE).
-    95% bootstrap CI shown as shaded band.
-    Dashed vertical at L11.
+    Accepts pre-computed cache dict from compute_all().
     """
     run_results = {}
-
-    for label, (delta, safe_mat, vuln_mat, meta, _) in layers_data.items():
-        run_name, layer_str = label.rsplit(" L", 1)
-        layer = int(layer_str)
-
-        if run_name not in run_results:
-            run_results[run_name] = {"layers": [], "global": [], "c_only": [], "php_only": [], "js_only": []}
-
-        global_res = probe_vuln_secure(safe_mat, vuln_mat, meta, ext=None)
-        c_res      = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="c")
-        php_res    = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="php")
-        js_res     = probe_vuln_secure(safe_mat, vuln_mat, meta, ext="js")
-
-        run_results[run_name]["layers"].append(layer)
-        run_results[run_name]["global"].append(global_res)
-        run_results[run_name]["c_only"].append(c_res)
-        run_results[run_name]["php_only"].append(php_res)
-        run_results[run_name]["js_only"].append(js_res)
-
-    # Sort by layer
-    for rn in run_results:
-        order = np.argsort(run_results[rn]["layers"])
-        for key in ("layers", "global", "c_only", "php_only", "js_only"):
-            run_results[rn][key] = [run_results[rn][key][i] for i in order]
+    for run_name, layers in cache.items():
+        run_results[run_name] = {"layers": [], "global": [], "c_only": [], "php_only": [], "js_only": []}
+        for layer_str in sorted(layers.keys(), key=int):
+            vs = layers[layer_str]["vuln_sec"]
+            run_results[run_name]["layers"].append(int(layer_str))
+            run_results[run_name]["global"].append(vs["global"])
+            run_results[run_name]["c_only"].append(vs["c_only"])
+            run_results[run_name]["php_only"].append(vs["php_only"])
+            run_results[run_name]["js_only"].append(vs["js_only"])
 
     n_runs = len(run_results)
     if n_runs == 0:
@@ -754,47 +806,59 @@ def fig_vuln_secure_by_layer(layers_data):
 # Summary table
 # ─────────────────────────────────────────────────────────────────────────────
 
-def print_summary(layers_data):
+def print_summary(cache):
     rows = []
-    for label, (delta, _s, _v, meta, _) in layers_data.items():
-        run_name, layer_str = label.rsplit(" L", 1)
-        layer = int(layer_str)
-        resid = residualise_filetype(delta, meta)
-        raw_p   = probe_cwe_families(delta, meta, MAIN_FAMILIES)
-        resid_p = probe_cwe_families(resid, meta, MAIN_FAMILIES)
-        for ext, fam in LANG_FAMILY_PAIRS:
-            wp = probe_within_language(delta, meta, ext, MAIN_FAMILIES)
-            rows.append({
-                "Run":    run_name,
-                "Layer":  layer,
-                "Ext":    ext,
-                "Family": fam,
-                "Raw":    round(raw_p.loc[fam, "roc_auc"], 3) if fam in raw_p.index else float("nan"),
-                "Resid":  round(resid_p.loc[fam, "roc_auc"], 3) if fam in resid_p.index else float("nan"),
-                "Within": round(wp.loc[fam, "roc_auc"], 3) if (wp is not None and fam in wp.index) else float("nan"),
-            })
+    for run_name, layers in cache.items():
+        for layer_str, vals in layers.items():
+            layer = int(layer_str)
+            for ext, fam in LANG_FAMILY_PAIRS:
+                raw   = vals["raw_cwe"].get(fam, float("nan"))
+                resid = vals["resid_cwe"].get(fam, float("nan"))
+                wp    = vals["within"].get(ext)
+                within = wp.get(fam, float("nan")) if wp is not None else float("nan")
+                rows.append({
+                    "Run": run_name, "Layer": layer, "Ext": ext, "Family": fam,
+                    "Raw": round(raw, 3), "Resid": round(resid, 3), "Within": round(within, 3),
+                })
     df = pd.DataFrame(rows)
     df["Δ(Within−Resid)"] = (df["Within"] - df["Resid"]).round(3)
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Within-language baseline summary")
-    print("="*80)
+    print("=" * 80)
     print(df.to_string(index=False))
     return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--recompute", action="store_true",
+        help="Ignore cached results and re-run all probes from raw activations.",
+    )
+    args = parser.parse_args()
+
     print(f"Paper figures dir : {PAPER_FIGS}")
     print(f"Activations dir   : {ARTIFACTS}")
+    print(f"Cache file        : {CACHE_FILE}")
     print()
 
-    layers_data = load_all_layers()
+    if not args.recompute and CACHE_FILE.exists():
+        print("Loading cached results (use --recompute to re-run probes)...")
+        cache = load_cache()
+    else:
+        layers_data = load_all_layers()
+        print("\nRunning all probes...")
+        cache = compute_all(layers_data)
+        save_cache(cache)
 
     print("\nGenerating figures...")
-    fig_vuln_secure_by_layer(layers_data)
-    fig_within_lang_by_layer(layers_data)
-    fig_within_vs_resid(layers_data)
-    fig_within_c_pairwise(layers_data)
+    fig_vuln_secure_by_layer(cache)
+    fig_within_lang_by_layer(cache)
+    fig_within_vs_resid(cache)
+    fig_within_c_pairwise(cache)
 
-    print_summary(layers_data)
+    print_summary(cache)
     print("\nDone.")
