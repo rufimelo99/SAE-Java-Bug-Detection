@@ -4,11 +4,13 @@ Multi-dataset replication of the binary vulnerability probe.
 Runs three probes across all four C/C++ datasets:
   1. Standard binary probe (vulnerable vs. secure, all CWEs pooled)
   2. CWE-balanced binary probe (subsampled to equal CWE representation)
-  3. CWE classification probe (multi-class OvR: can the model tell CWEs apart?)
+  3. Pairwise CWE probe: for every (CWE-A, CWE-B) pair with enough samples,
+     binary probe distinguishing the two CWE types (secure+vuln pooled per CWE).
+     Reports mean pairwise AUROC and the full pair matrix.
 
-Probes 1 vs 3 together support the CWE-imbalance argument: if CWE classification
-AUROC >> binary AUROC, the representations are organised by vulnerability type
-rather than security status, explaining the low binary ceiling.
+Probes 1 vs 3 support the CWE-imbalance argument: if pairwise CWE AUROC >>
+binary vuln/sec AUROC, representations are organised by vulnerability TYPE
+rather than security STATUS.
 
 Datasets (activations expected in code-security-probing sibling repo):
     DeltaSecommits  (c_only)
@@ -218,9 +220,9 @@ def run_probe(
     }
 
 
-# ── CWE classification probe ─────────────────────────────────────────────────
+# ── Pairwise CWE probe ────────────────────────────────────────────────────────
 
-def run_cwe_classification(
+def run_pairwise_cwe(
     secure: np.ndarray,
     vuln: np.ndarray,
     cwes: list[str],
@@ -228,71 +230,70 @@ def run_cwe_classification(
     min_cwe_samples: int = 20,
 ) -> dict | None:
     """
-    Multi-class CWE classification probe (OvR logistic regression).
+    For every (CWE-A, CWE-B) pair with enough samples, run a binary probe
+    that distinguishes the two CWE types (secure + vulnerable pooled per CWE).
 
-    Uses all samples (secure + vulnerable pooled) labelled by CWE type.
-    Reports macro-averaged AUROC across CWEs with sufficient samples,
-    plus per-CWE AUROC at the primary analysis layer.
-
-    A high macro-AUROC here vs. a low binary AUROC above confirms that
-    representations are organised by vulnerability TYPE, not security STATUS.
+    Returns mean pairwise AUROC and the full {CWE-A vs CWE-B: auroc} dict.
+    A high mean pairwise AUROC vs. a low binary vuln/sec AUROC confirms the
+    model encodes vulnerability TYPE rather than security STATUS.
     """
-    from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import LabelEncoder
-
     cwe_arr = np.array(cwes)
     unique, counts = np.unique(cwe_arr, return_counts=True)
 
-    # Keep only CWEs with enough samples (both secure and vulnerable contribute)
-    qualifying = [cwe for cwe, n in zip(unique, counts) if n >= min_cwe_samples]
+    # Pool secure + vulnerable for each CWE (CWE type is the label)
+    cwe_to_X: dict[str, np.ndarray] = {}
+    for cwe, n in zip(unique, counts):
+        if n < min_cwe_samples:
+            continue
+        mask = cwe_arr == cwe
+        cwe_to_X[cwe] = np.vstack([secure[mask], vuln[mask]]).astype(np.float32)
+
+    qualifying = sorted(cwe_to_X.keys())
     if len(qualifying) < 2:
         return None
 
-    mask = np.isin(cwe_arr, qualifying)
-    X    = np.vstack([secure[mask], vuln[mask]]).astype(np.float32)
-    # Label = CWE (same for secure and vulnerable of the same pair)
-    cwe_labels = np.concatenate([cwe_arr[mask], cwe_arr[mask]])
+    pairs: dict[str, float] = {}
+    for i, cwe_a in enumerate(qualifying):
+        for cwe_b in qualifying[i + 1:]:
+            X_a, X_b = cwe_to_X[cwe_a], cwe_to_X[cwe_b]
+            X = np.vstack([X_a, X_b])
+            y = np.array([0] * len(X_a) + [1] * len(X_b), dtype=int)
 
-    le = LabelEncoder()
-    y  = le.fit_transform(cwe_labels)
-    n_classes = len(le.classes_)
+            n_splits = min(5, int(y.sum()), int((~y.astype(bool)).sum()))
+            if n_splits < 2:
+                continue
 
-    skf      = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
-    y_scores = np.zeros((len(y), n_classes), dtype=float)
+            skf     = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=SEED)
+            y_score = np.zeros(len(y), dtype=float)
 
-    for train_idx, test_idx in skf.split(X, y):
-        scaler = StandardScaler()
-        X_tr   = scaler.fit_transform(X[train_idx])
-        X_te   = scaler.transform(X[test_idx])
+            for train_idx, test_idx in skf.split(X, y):
+                scaler = StandardScaler()
+                X_tr   = scaler.fit_transform(X[train_idx])
+                X_te   = scaler.transform(X[test_idx])
 
-        n_comp = min(n_components, X_tr.shape[1], len(train_idx) - 1)
-        pca    = PCA(n_components=n_comp, random_state=SEED)
-        X_tr   = pca.fit_transform(X_tr)
-        X_te   = pca.transform(X_te)
+                n_comp = min(n_components, X_tr.shape[1], len(train_idx) - 1)
+                pca    = PCA(n_components=n_comp, random_state=SEED)
+                X_tr   = pca.fit_transform(X_tr)
+                X_te   = pca.transform(X_te)
 
-        clf = LogisticRegression(C=0.1, max_iter=1000, multi_class="ovr",
-                                 class_weight="balanced", random_state=SEED)
-        clf.fit(X_tr, y[train_idx])
-        y_scores[test_idx] = clf.predict_proba(X_te)
+                clf = LogisticRegression(C=0.1, max_iter=1000,
+                                         class_weight="balanced", random_state=SEED)
+                clf.fit(X_tr, y[train_idx])
+                y_score[test_idx] = clf.predict_proba(X_te)[:, 1]
 
-    # Macro-averaged OvR AUROC
-    macro_auc = float(roc_auc_score(y, y_scores, multi_class="ovr",
-                                     average="macro"))
+            from sklearn.metrics import roc_auc_score
+            auc = float(roc_auc_score(y, y_score))
+            pairs[f"{cwe_a} vs {cwe_b}"] = round(auc, 4)
 
-    # Per-CWE AUROC (OvR: each class vs. rest)
-    per_cwe: dict[str, float] = {}
-    for i, cwe in enumerate(le.classes_):
-        y_bin   = (y == i).astype(int)
-        y_score = y_scores[:, i]
-        if y_bin.sum() < 2:
-            continue
-        per_cwe[cwe] = round(float(roc_auc_score(y_bin, y_score)), 4)
+    if not pairs:
+        return None
 
+    mean_auc = float(np.mean(list(pairs.values())))
     return {
-        "macro_auroc": round(macro_auc, 4),
-        "n_cwes":      n_classes,
-        "n_samples":   int(X.shape[0]),
-        "per_cwe":     per_cwe,
+        "mean_auroc": round(mean_auc, 4),
+        "n_pairs":    len(pairs),
+        "n_cwes":     len(qualifying),
+        "pairs":      pairs,
     }
 
 
@@ -359,24 +360,24 @@ def main() -> None:
                 bal     = None
                 bal_str = f"balanced: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
 
-            cwe_cls = run_cwe_classification(
+            pw = run_pairwise_cwe(
                 secure, vuln, cwes,
                 n_components=args.n_components,
                 min_cwe_samples=args.min_cwe_samples,
             )
-            if cwe_cls is not None:
-                cwe_str = (f"CWE-clf: {cwe_cls['macro_auroc']:.4f} "
-                           f"({cwe_cls['n_cwes']} classes)")
+            if pw is not None:
+                pw_str = (f"pairwise: {pw['mean_auroc']:.4f} "
+                          f"({pw['n_pairs']} pairs, {pw['n_cwes']} CWEs)")
             else:
-                cwe_str = f"CWE-clf: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
+                pw_str = f"pairwise: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
 
-            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}   {cwe_str}")
+            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}   {pw_str}")
 
             all_results[name]["layers"][str(layer)] = {
-                "n_pairs":      n_pairs,
-                "standard":     std,
-                "balanced":     bal,
-                "cwe_classify": cwe_cls,
+                "n_pairs":  n_pairs,
+                "standard": std,
+                "balanced": bal,
+                "pairwise": pw,
             }
 
     if not all_results:
@@ -385,25 +386,25 @@ def main() -> None:
 
     # ── Summary table (L11) ───────────────────────────────────────────────────
     pivot = "11"
-    print(f"\n{'Dataset':<20} {'n':>6}  {'vuln/sec':>10}  {'balanced':>10}  {'CWE-clf':>10}  {'gap':>8}")
-    print("-" * 74)
+    print(f"\n{'Dataset':<20} {'n':>6}  {'vuln/sec':>10}  {'balanced':>10}  {'pairwise':>10}  {'gap':>8}")
+    print("-" * 76)
     for name, res in all_results.items():
         l   = res["layers"].get(pivot, {})
         std = l.get("standard") or {}
         bal = l.get("balanced") or {}
-        clf = l.get("cwe_classify") or {}
+        pw  = l.get("pairwise") or {}
         n   = l.get("n_pairs", 0)
         bin_auc = std.get("auroc", float("nan"))
-        cwe_auc = clf.get("macro_auroc", float("nan"))
-        gap     = cwe_auc - bin_auc if not (np.isnan(cwe_auc) or np.isnan(bin_auc)) else float("nan")
+        pw_auc  = pw.get("mean_auroc", float("nan"))
+        gap     = pw_auc - bin_auc if not (np.isnan(pw_auc) or np.isnan(bin_auc)) else float("nan")
         print(
             f"  {name:<18} {n:>6}  "
             f"{bin_auc:>10.4f}  "
             f"{bal.get('auroc', float('nan')):>10.4f}  "
-            f"{cwe_auc:>10.4f}  "
+            f"{pw_auc:>10.4f}  "
             f"{gap:>+8.4f}"
         )
-    print("\n  gap = CWE-clf macro-AUROC − binary AUROC  (positive → CWE more separable than vuln/sec)")
+    print("\n  gap = mean pairwise CWE AUROC − binary AUROC  (positive → CWE type more separable than vuln/sec)")
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     out_json = RESULTS / "multi_dataset_comparison.json"
@@ -472,15 +473,15 @@ def _plot(results: dict, layers: list[int]) -> None:
         ax.set_title(title, fontsize=9)
         ax.legend(fontsize=7, loc="lower right")
 
-    # ── Panel 3: CWE classification macro-AUROC ───────────────────────────────
+    # ── Panel 3: mean pairwise CWE AUROC ─────────────────────────────────────
     ax = axes[2]
     for name, res in results.items():
         aurocs, xs_plot = [], []
         for i, layer in enumerate(layers):
-            entry = res["layers"].get(str(layer), {}).get("cwe_classify")
+            entry = res["layers"].get(str(layer), {}).get("pairwise")
             if entry is None:
                 continue
-            aurocs.append(entry["macro_auroc"])
+            aurocs.append(entry["mean_auroc"])
             xs_plot.append(i)
 
         if not aurocs:
@@ -495,12 +496,12 @@ def _plot(results: dict, layers: list[int]) -> None:
     ax.set_xticks(xs)
     ax.set_xticklabels([f"L{l}" for l in layers], rotation=45)
     ax.set_xlabel("Layer")
-    ax.set_ylabel("Macro-AUROC (OvR)")
-    ax.set_title("CWE classification (type separability)", fontsize=9)
+    ax.set_ylabel("Mean pairwise AUROC")
+    ax.set_title("Pairwise CWE separation", fontsize=9)
     ax.legend(fontsize=7, loc="lower right")
 
     fig.suptitle(
-        "Vulnerability probe vs. CWE classification — multi-dataset (C/C++)",
+        "Vulnerability probe vs. pairwise CWE separation — multi-dataset (C/C++)",
         fontsize=9, y=1.01,
     )
     fig.tight_layout()
