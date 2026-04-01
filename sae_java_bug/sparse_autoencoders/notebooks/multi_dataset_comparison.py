@@ -1,10 +1,14 @@
 """
 Multi-dataset replication of the binary vulnerability probe.
 
-Runs the standard binary probe (5-fold stratified CV, LR + PCA-50) across
-all four C/C++ datasets and a CWE-balanced ablation alongside each, testing
-whether AUROC is driven by CWE composition rather than a genuine
-vulnerable/secure signal.
+Runs three probes across all four C/C++ datasets:
+  1. Standard binary probe (vulnerable vs. secure, all CWEs pooled)
+  2. CWE-balanced binary probe (subsampled to equal CWE representation)
+  3. CWE classification probe (multi-class OvR: can the model tell CWEs apart?)
+
+Probes 1 vs 3 together support the CWE-imbalance argument: if CWE classification
+AUROC >> binary AUROC, the representations are organised by vulnerability type
+rather than security status, explaining the low binary ceiling.
 
 Datasets (activations expected in code-security-probing sibling repo):
     DeltaSecommits  (c_only)
@@ -42,7 +46,18 @@ SAE_REPO   = Path(__file__).parents[3]   # SAE-Java-Bug-Detection/
 RESULTS    = SAE_REPO / "sae_java_bug" / "artifacts" / "results"
 FIGS_DIR   = SAE_REPO / "sae_java_bug" / "artifacts" / "figures"
 
-CSP_ACTS   = GITHUB / "code-security-probing" / "artifacts" / "activations"
+# Activations may live in either repo — check SAE repo first, then code-security-probing
+_SAE_ACTS  = SAE_REPO / "sae_java_bug" / "artifacts" / "activations"
+_CSP_ACTS  = GITHUB / "code-security-probing" / "artifacts" / "activations"
+
+
+def _resolve_acts_dir(subdir: str) -> Path | None:
+    """Return the first base directory that contains the given subdir."""
+    for base in (_SAE_ACTS, _CSP_ACTS):
+        candidate = base / subdir
+        if (candidate / f"layer_{LAYERS[0]}_train.jsonl").exists():
+            return candidate
+    return None
 
 PAPER_FIGS = (
     GITHUB
@@ -69,12 +84,17 @@ def load_all_splits(
 ) -> tuple[np.ndarray, np.ndarray, list[str]] | None:
     """
     Load (secure_mat, vuln_mat, cwes) from whichever of train/test splits exist.
+    Checks SAE repo activations first, then code-security-probing.
     Returns None if no files are found for this layer.
     """
+    base = _resolve_acts_dir(acts_subdir)
+    if base is None:
+        return None
+
     secure_rows, vuln_rows, cwes = [], [], []
     found = False
     for split in ("train", "test"):
-        path = CSP_ACTS / acts_subdir / f"layer_{layer}_{split}.jsonl"
+        path = base / f"layer_{layer}_{split}.jsonl"
         if not path.exists():
             continue
         found = True
@@ -198,6 +218,84 @@ def run_probe(
     }
 
 
+# ── CWE classification probe ─────────────────────────────────────────────────
+
+def run_cwe_classification(
+    secure: np.ndarray,
+    vuln: np.ndarray,
+    cwes: list[str],
+    n_components: int = 50,
+    min_cwe_samples: int = 20,
+) -> dict | None:
+    """
+    Multi-class CWE classification probe (OvR logistic regression).
+
+    Uses all samples (secure + vulnerable pooled) labelled by CWE type.
+    Reports macro-averaged AUROC across CWEs with sufficient samples,
+    plus per-CWE AUROC at the primary analysis layer.
+
+    A high macro-AUROC here vs. a low binary AUROC above confirms that
+    representations are organised by vulnerability TYPE, not security STATUS.
+    """
+    from sklearn.metrics import roc_auc_score
+    from sklearn.preprocessing import LabelEncoder
+
+    cwe_arr = np.array(cwes)
+    unique, counts = np.unique(cwe_arr, return_counts=True)
+
+    # Keep only CWEs with enough samples (both secure and vulnerable contribute)
+    qualifying = [cwe for cwe, n in zip(unique, counts) if n >= min_cwe_samples]
+    if len(qualifying) < 2:
+        return None
+
+    mask = np.isin(cwe_arr, qualifying)
+    X    = np.vstack([secure[mask], vuln[mask]]).astype(np.float32)
+    # Label = CWE (same for secure and vulnerable of the same pair)
+    cwe_labels = np.concatenate([cwe_arr[mask], cwe_arr[mask]])
+
+    le = LabelEncoder()
+    y  = le.fit_transform(cwe_labels)
+    n_classes = len(le.classes_)
+
+    skf      = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+    y_scores = np.zeros((len(y), n_classes), dtype=float)
+
+    for train_idx, test_idx in skf.split(X, y):
+        scaler = StandardScaler()
+        X_tr   = scaler.fit_transform(X[train_idx])
+        X_te   = scaler.transform(X[test_idx])
+
+        n_comp = min(n_components, X_tr.shape[1], len(train_idx) - 1)
+        pca    = PCA(n_components=n_comp, random_state=SEED)
+        X_tr   = pca.fit_transform(X_tr)
+        X_te   = pca.transform(X_te)
+
+        clf = LogisticRegression(C=0.1, max_iter=1000, multi_class="ovr",
+                                 class_weight="balanced", random_state=SEED)
+        clf.fit(X_tr, y[train_idx])
+        y_scores[test_idx] = clf.predict_proba(X_te)
+
+    # Macro-averaged OvR AUROC
+    macro_auc = float(roc_auc_score(y, y_scores, multi_class="ovr",
+                                     average="macro"))
+
+    # Per-CWE AUROC (OvR: each class vs. rest)
+    per_cwe: dict[str, float] = {}
+    for i, cwe in enumerate(le.classes_):
+        y_bin   = (y == i).astype(int)
+        y_score = y_scores[:, i]
+        if y_bin.sum() < 2:
+            continue
+        per_cwe[cwe] = round(float(roc_auc_score(y_bin, y_score)), 4)
+
+    return {
+        "macro_auroc": round(macro_auc, 4),
+        "n_cwes":      n_classes,
+        "n_samples":   int(X.shape[0]),
+        "per_cwe":     per_cwe,
+    }
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -221,12 +319,13 @@ def main() -> None:
             continue
 
         subdir   = DATASETS[name]
-        sentinel = CSP_ACTS / subdir / f"layer_{args.layers[0]}_train.jsonl"
-        if not sentinel.exists():
-            print(f"\n[SKIP] {name}: activations not found at {CSP_ACTS / subdir}")
+        acts_dir = _resolve_acts_dir(subdir)
+        if acts_dir is None:
+            print(f"\n[SKIP] {name}: activations not found in either repo (subdir: {subdir})")
             print(f"       cd code-security-probing && python experiments/00b_extract_sven_acts.py "
                   f"--pairs_jsonl artifacts/data/... --out_subdir {subdir}")
             continue
+        print(f"\n  Found activations at: {acts_dir}")
 
         print(f"\n{'='*60}")
         print(f"  {name}  ({subdir})")
@@ -260,12 +359,24 @@ def main() -> None:
                 bal     = None
                 bal_str = f"balanced: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
 
-            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}")
+            cwe_cls = run_cwe_classification(
+                secure, vuln, cwes,
+                n_components=args.n_components,
+                min_cwe_samples=args.min_cwe_samples,
+            )
+            if cwe_cls is not None:
+                cwe_str = (f"CWE-clf: {cwe_cls['macro_auroc']:.4f} "
+                           f"({cwe_cls['n_cwes']} classes)")
+            else:
+                cwe_str = f"CWE-clf: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
+
+            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}   {cwe_str}")
 
             all_results[name]["layers"][str(layer)] = {
-                "n_pairs":  n_pairs,
-                "standard": std,
-                "balanced": bal,
+                "n_pairs":      n_pairs,
+                "standard":     std,
+                "balanced":     bal,
+                "cwe_classify": cwe_cls,
             }
 
     if not all_results:
@@ -274,18 +385,25 @@ def main() -> None:
 
     # ── Summary table (L11) ───────────────────────────────────────────────────
     pivot = "11"
-    print(f"\n{'Dataset':<20} {'n':>6}  {'L11 standard':>14}  {'L11 balanced':>14}")
-    print("-" * 62)
+    print(f"\n{'Dataset':<20} {'n':>6}  {'vuln/sec':>10}  {'balanced':>10}  {'CWE-clf':>10}  {'gap':>8}")
+    print("-" * 74)
     for name, res in all_results.items():
         l   = res["layers"].get(pivot, {})
-        std = l.get("standard", {})
+        std = l.get("standard") or {}
         bal = l.get("balanced") or {}
+        clf = l.get("cwe_classify") or {}
         n   = l.get("n_pairs", 0)
+        bin_auc = std.get("auroc", float("nan"))
+        cwe_auc = clf.get("macro_auroc", float("nan"))
+        gap     = cwe_auc - bin_auc if not (np.isnan(cwe_auc) or np.isnan(bin_auc)) else float("nan")
         print(
             f"  {name:<18} {n:>6}  "
-            f"{std.get('auroc', float('nan')):>14.4f}  "
-            f"{bal.get('auroc', float('nan')):>14.4f}"
+            f"{bin_auc:>10.4f}  "
+            f"{bal.get('auroc', float('nan')):>10.4f}  "
+            f"{cwe_auc:>10.4f}  "
+            f"{gap:>+8.4f}"
         )
+    print("\n  gap = CWE-clf macro-AUROC − binary AUROC  (positive → CWE more separable than vuln/sec)")
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     out_json = RESULTS / "multi_dataset_comparison.json"
@@ -318,10 +436,11 @@ def _plot(results: dict, layers: list[int]) -> None:
 
     xs = list(range(len(layers)))
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 3.5), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.5))
 
+    # ── Panels 1 & 2: binary probe (standard + balanced) ─────────────────────
     for ax, mode, title in zip(
-        axes,
+        axes[:2],
         ["standard", "balanced"],
         ["Standard (all CWEs pooled)", "CWE-balanced ablation"],
     ):
@@ -349,13 +468,39 @@ def _plot(results: dict, layers: list[int]) -> None:
         ax.set_xticks(xs)
         ax.set_xticklabels([f"L{l}" for l in layers], rotation=45)
         ax.set_xlabel("Layer")
-        if mode == "standard":
-            ax.set_ylabel("AUROC (5-fold CV)")
+        ax.set_ylabel("AUROC (5-fold CV)")
         ax.set_title(title, fontsize=9)
         ax.legend(fontsize=7, loc="lower right")
 
+    # ── Panel 3: CWE classification macro-AUROC ───────────────────────────────
+    ax = axes[2]
+    for name, res in results.items():
+        aurocs, xs_plot = [], []
+        for i, layer in enumerate(layers):
+            entry = res["layers"].get(str(layer), {}).get("cwe_classify")
+            if entry is None:
+                continue
+            aurocs.append(entry["macro_auroc"])
+            xs_plot.append(i)
+
+        if not aurocs:
+            continue
+
+        col = COLORS.get(name, "gray")
+        mrk = MARKERS.get(name, "o")
+        ax.plot(xs_plot, aurocs, marker=mrk, ls="-", lw=1.5, ms=4,
+                label=name, color=col)
+
+    ax.axhline(0.5, color="gray", lw=1, ls="--", label="chance")
+    ax.set_xticks(xs)
+    ax.set_xticklabels([f"L{l}" for l in layers], rotation=45)
+    ax.set_xlabel("Layer")
+    ax.set_ylabel("Macro-AUROC (OvR)")
+    ax.set_title("CWE classification (type separability)", fontsize=9)
+    ax.legend(fontsize=7, loc="lower right")
+
     fig.suptitle(
-        "Binary vulnerability probe — multi-dataset replication (C/C++)",
+        "Vulnerability probe vs. CWE classification — multi-dataset (C/C++)",
         fontsize=9, y=1.01,
     )
     fig.tight_layout()
