@@ -307,6 +307,8 @@ def main() -> None:
     parser.add_argument("--layers", nargs="+", type=int, default=LAYERS)
     parser.add_argument("--n_components", type=int, default=50)
     parser.add_argument("--min_cwe_samples", type=int, default=20)
+    parser.add_argument("--no_pairwise", action="store_true",
+                        help="Skip pairwise CWE probe (fast mode for large datasets)")
     args = parser.parse_args()
 
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -335,6 +337,7 @@ def main() -> None:
         all_results[name] = {"subdir": subdir, "layers": {}}
 
         for layer in args.layers:
+            print(f"  L{layer:>2}  loading...", flush=True)
             data = load_all_splits(subdir, layer)
             if data is None:
                 print(f"  L{layer:>2}  [SKIP] no data")
@@ -360,18 +363,21 @@ def main() -> None:
                 bal     = None
                 bal_str = f"balanced: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
 
-            pw = run_pairwise_cwe(
-                secure, vuln, cwes,
-                n_components=args.n_components,
-                min_cwe_samples=args.min_cwe_samples,
-            )
+            if args.no_pairwise:
+                pw = None
+            else:
+                pw = run_pairwise_cwe(
+                    secure, vuln, cwes,
+                    n_components=args.n_components,
+                    min_cwe_samples=args.min_cwe_samples,
+                )
             if pw is not None:
                 pw_str = (f"pairwise: {pw['mean_auroc']:.4f} "
                           f"({pw['n_pairs']} pairs, {pw['n_cwes']} CWEs)")
             else:
                 pw_str = f"pairwise: N/A (<2 CWEs with ≥{args.min_cwe_samples} samples)"
 
-            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}   {pw_str}")
+            print(f"  L{layer:>2}  n={n_pairs:>5}  {std_str}   {bal_str}   {pw_str}", flush=True)
 
             all_results[name]["layers"][str(layer)] = {
                 "n_pairs":  n_pairs,
@@ -379,6 +385,26 @@ def main() -> None:
                 "balanced": bal,
                 "pairwise": pw,
             }
+
+            # Incremental save after each layer — deep-merge layers within each dataset
+            out_json = RESULTS / "multi_dataset_comparison.json"
+            merged: dict = {}
+            if out_json.exists():
+                try:
+                    merged = json.loads(out_json.read_text()).get("results", {})
+                except Exception:
+                    merged = {}
+            for ds_name, ds_data in all_results.items():
+                if ds_name in merged:
+                    merged[ds_name]["layers"].update(ds_data["layers"])
+                else:
+                    merged[ds_name] = ds_data
+            with out_json.open("w") as f:
+                json.dump(
+                    {"layers": args.layers, "n_components": args.n_components,
+                     "min_cwe_samples": args.min_cwe_samples, "results": merged},
+                    f, indent=2,
+                )
 
     if not all_results:
         print("\nNo datasets available. Run extraction scripts first.")
@@ -406,17 +432,28 @@ def main() -> None:
         )
     print("\n  gap = mean pairwise CWE AUROC − binary AUROC  (positive → CWE type more separable than vuln/sec)")
 
-    # ── Save JSON ─────────────────────────────────────────────────────────────
+    # ── Save JSON (merge with any results from prior runs) ────────────────────
     out_json = RESULTS / "multi_dataset_comparison.json"
+    merged_final: dict = {}
+    if out_json.exists():
+        try:
+            merged_final = json.loads(out_json.read_text()).get("results", {})
+        except Exception:
+            merged_final = {}
+    for ds_name, ds_data in all_results.items():
+        if ds_name in merged_final:
+            merged_final[ds_name]["layers"].update(ds_data["layers"])
+        else:
+            merged_final[ds_name] = ds_data
     with out_json.open("w") as f:
         json.dump(
             {"layers": args.layers, "n_components": args.n_components,
-             "min_cwe_samples": args.min_cwe_samples, "results": all_results},
+             "min_cwe_samples": args.min_cwe_samples, "results": merged_final},
             f, indent=2,
         )
     print(f"\nResults → {out_json}")
 
-    _plot(all_results, args.layers)
+    _plot(merged_final, args.layers)
 
 
 # ── Plotting ──────────────────────────────────────────────────────────────────
