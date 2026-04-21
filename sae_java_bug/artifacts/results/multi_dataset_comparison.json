@@ -1,0 +1,570 @@
+{
+  "layers": [
+    19,
+    23,
+    27
+  ],
+  "n_components": 50,
+  "min_cwe_samples": 20,
+  "results": {
+    "PreciseBugs": {
+      "subdir": "precisebugs_c_only",
+      "layers": {
+        "7": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5125,
+            "ci_lo": 0.5,
+            "ci_hi": 0.525,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3972,
+            "ci_lo": 0.348,
+            "ci_hi": 0.45,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.8243,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "11": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5205,
+            "ci_lo": 0.508,
+            "ci_hi": 0.533,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3699,
+            "ci_lo": 0.323,
+            "ci_hi": 0.419,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.8363,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "15": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5209,
+            "ci_lo": 0.509,
+            "ci_hi": 0.533,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3733,
+            "ci_lo": 0.316,
+            "ci_hi": 0.427,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.834,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "19": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5178,
+            "ci_lo": 0.506,
+            "ci_hi": 0.53,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3709,
+            "ci_lo": 0.321,
+            "ci_hi": 0.421,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.8299,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "0": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5104,
+            "ci_lo": 0.499,
+            "ci_hi": 0.522,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3971,
+            "ci_lo": 0.338,
+            "ci_hi": 0.449,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.7281,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "3": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5265,
+            "ci_lo": 0.513,
+            "ci_hi": 0.539,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3813,
+            "ci_lo": 0.329,
+            "ci_hi": 0.437,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.7695,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "23": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5285,
+            "ci_lo": 0.516,
+            "ci_hi": 0.54,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3824,
+            "ci_lo": 0.331,
+            "ci_hi": 0.44,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.8542,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        },
+        "27": {
+          "n_pairs": 4101,
+          "standard": {
+            "auroc": 0.5343,
+            "ci_lo": 0.524,
+            "ci_hi": 0.546,
+            "n": 4101
+          },
+          "balanced": {
+            "auroc": 0.3783,
+            "ci_lo": 0.327,
+            "ci_hi": 0.435,
+            "n_cwes": 10,
+            "min_count": 21
+          },
+          "pairwise": {
+            "mean_auroc": 0.8636,
+            "n_pairs": 45,
+            "n_cwes": 10,
+            "pairs": {}
+          }
+        }
+      }
+    },
+    "DeltaSecommits": {
+      "subdir": "c_only",
+      "layers": {
+        "0": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4209,
+            "ci_lo": 0.401,
+            "ci_hi": 0.441,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3456,
+            "ci_lo": 0.314,
+            "ci_hi": 0.381,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.7948,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "3": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4716,
+            "ci_lo": 0.45,
+            "ci_hi": 0.493,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.4136,
+            "ci_lo": 0.379,
+            "ci_hi": 0.447,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.7787,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "7": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4254,
+            "ci_lo": 0.405,
+            "ci_hi": 0.445,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3276,
+            "ci_lo": 0.296,
+            "ci_hi": 0.36,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8108,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "11": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4662,
+            "ci_lo": 0.443,
+            "ci_hi": 0.489,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3867,
+            "ci_lo": 0.351,
+            "ci_hi": 0.42,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8227,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "15": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4844,
+            "ci_lo": 0.463,
+            "ci_hi": 0.505,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3854,
+            "ci_lo": 0.351,
+            "ci_hi": 0.421,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8258,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "19": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.5184,
+            "ci_lo": 0.496,
+            "ci_hi": 0.54,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.4186,
+            "ci_lo": 0.381,
+            "ci_hi": 0.456,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8364,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "23": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.5029,
+            "ci_lo": 0.482,
+            "ci_hi": 0.524,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3919,
+            "ci_lo": 0.356,
+            "ci_hi": 0.427,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8506,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        },
+        "27": {
+          "n_pairs": 1368,
+          "standard": {
+            "auroc": 0.4746,
+            "ci_lo": 0.452,
+            "ci_hi": 0.495,
+            "n": 1368
+          },
+          "balanced": {
+            "auroc": 0.3616,
+            "ci_lo": 0.326,
+            "ci_hi": 0.401,
+            "n": 495,
+            "n_cwes": 15,
+            "min_count": 33
+          },
+          "pairwise": {
+            "mean_auroc": 0.8639,
+            "n_pairs": 105,
+            "n_cwes": 15,
+            "pairs": {}
+          }
+        }
+      }
+    },
+    "SVEN": {
+      "subdir": "sven_c_only",
+      "layers": {
+        "0": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.4492,
+            "ci_lo": 0.409,
+            "ci_hi": 0.488,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2491,
+            "ci_lo": 0.192,
+            "ci_hi": 0.31,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.7619,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "3": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3996,
+            "ci_lo": 0.363,
+            "ci_hi": 0.44,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2427,
+            "ci_lo": 0.19,
+            "ci_hi": 0.3,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.7807,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "7": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3846,
+            "ci_lo": 0.351,
+            "ci_hi": 0.42,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.244,
+            "ci_lo": 0.191,
+            "ci_hi": 0.302,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8073,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "11": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3768,
+            "ci_lo": 0.341,
+            "ci_hi": 0.412,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2425,
+            "ci_lo": 0.187,
+            "ci_hi": 0.3,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8398,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "15": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3672,
+            "ci_lo": 0.33,
+            "ci_hi": 0.404,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2566,
+            "ci_lo": 0.206,
+            "ci_hi": 0.312,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8396,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "19": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3501,
+            "ci_lo": 0.316,
+            "ci_hi": 0.386,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2133,
+            "ci_lo": 0.164,
+            "ci_hi": 0.265,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8536,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "23": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.385,
+            "ci_lo": 0.348,
+            "ci_hi": 0.421,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2125,
+            "ci_lo": 0.166,
+            "ci_hi": 0.262,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8481,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        },
+        "27": {
+          "n_pairs": 423,
+          "standard": {
+            "auroc": 0.3507,
+            "ci_lo": 0.313,
+            "ci_hi": 0.386,
+            "n": 423
+          },
+          "balanced": {
+            "auroc": 0.2087,
+            "ci_lo": 0.162,
+            "ci_hi": 0.264,
+            "n": 144,
+            "n_cwes": 6,
+            "min_count": 24
+          },
+          "pairwise": {
+            "mean_auroc": 0.8455,
+            "n_pairs": 15,
+            "n_cwes": 6,
+            "pairs": {}
+          }
+        }
+      }
+    }
+  }
+}
