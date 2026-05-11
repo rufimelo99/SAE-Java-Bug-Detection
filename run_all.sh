@@ -199,55 +199,76 @@ if [ "$RUN_NO_GPU" = true ]; then
     run_step "2b_ablation_figures" \
         $CONDA python "$NOTEBOOKS/generate_ablation_figures.py"
 
-    # ── 2c: Within-language baseline ──────────────────────────────────────────
+    # ── 2c: Paper 1 — Cross-layer direction probe ─────────────────────────────
+    # Paper 1: Fig. fig_direction_cosine_sim.pdf, fig_alignment_trajectory.pdf
+    # Output: Paper 1 figures (direction geometry)
+    # Runtime: ~2 min on CPU
+    run_step "2c_cross_layer_direction_probe" \
+        bash "$(dirname "$0")/scripts/cross_layer_direction_probe.sh"
+
+    # ── 2d: Paper 1 — Causal patching experiment ──────────────────────────────
+    # Paper 1: Fig. fig_causal_patching.pdf (activation patching effects)
+    # Output: Paper 1 figures (body vs last-token patching)
+    # Runtime: ~5 min on CPU
+    run_step "2d_causal_patching" \
+        bash "$(dirname "$0")/scripts/causal_patching.sh"
+
+    # ── 2e: Paper 1 — Directional readout probe ──────────────────────────────
+    # Paper 1: Fig. fig_directional_readout_comparison.pdf
+    # Output: Paper 1 figures (readout along direction)
+    # Runtime: ~2 min on CPU
+    run_step "2e_directional_readout_probe" \
+        bash "$(dirname "$0")/scripts/directional_readout_probe.sh"
+
+    # ── 2f: Within-language baseline ──────────────────────────────────────────
     # Paper: fig_vuln_secure_by_layer.pdf (multi-language overlay),
     #         fig_within_lang_by_layer_*.pdf (App. I),
     #         fig_within_vs_resid.pdf (App. I), fig_within_c_pairwise_*.pdf (App. H)
     # Within-C AUROC 0.469, within-PHP 0.319, within-JS 0.208
-    run_step "2c_within_language_baseline" \
+    run_step "2f_within_language_baseline" \
         $CONDA python "$NOTEBOOKS/within_language_baseline.py"
 
-    # ── 2d: Length-controlled probe ────────────────────────────────────────────
+    # ── 2g: Length-controlled probe ────────────────────────────────────────────
     # Paper: fig_length_controlled.pdf (App. D)
     # Controls: Ridge-residualise log-token-count + within-quartile probing
     # Requires: tokenizer (downloads automatically, no GPU inference)
-    run_step "2d_length_controlled_probe" \
+    run_step "2g_length_controlled_probe" \
         $CONDA python "$NOTEBOOKS/length_controlled_probe.py"
 
-    # ── 2e: Nonlinear probes ───────────────────────────────────────────────────
+    # ── 2h: Nonlinear probes ───────────────────────────────────────────────────
     # Paper: fig_nonlinear_probes.pdf + Table tab:nonlinear (App. M)
     # MLP and RBF-SVM across all 8 layers × 2 representations
     # Note: SVM on 5000-sample dataset can be slow (~5 min)
-    run_step "2e_nonlinear_probe" \
+    run_step "2h_nonlinear_probe" \
         $CONDA python "$NOTEBOOKS/nonlinear_probe.py"
 
-    # ── 2f: Position-stratified analysis B ────────────────────────────────────
+    # ── 2i: Position-stratified analysis B ────────────────────────────────────
     # Paper: Table tab:sign_test, Fig. fig_f1185_positional_profile (App. O)
     # Depends on: 1b checkpoint (positional_profiles_raw.jsonl)
     # No GPU — pure sklearn on binned activations
     POSITIONAL_CKPT="$ARTIFACTS/token_viz/figures/positional_profiles_raw.jsonl"
     if [ -f "$POSITIONAL_CKPT" ]; then
-        run_step "2f_positional_probe_b" \
+        run_step "2i_positional_probe_b" \
             $CONDA python "$NOTEBOOKS/positional_probe_b.py"
         # Copy outputs to paper figures
         cp "$ARTIFACTS/token_viz/figures/fig_f1185_positional_profile.pdf" "$PAPER_FIGS/" 2>/dev/null || true
         cp "$ARTIFACTS/token_viz/figures/fig_perfeature_auroc_bins1_19.pdf" "$PAPER_FIGS/" 2>/dev/null || true
     else
         echo ""
-        echo "  [2f] SKIPPED — positional_profiles_raw.jsonl not found (run phase 1b first)"
+        echo "  [2i] SKIPPED — positional_profiles_raw.jsonl not found (run phase 1b first)"
     fi
 
-    # ── 2g: Advanced pooling figures ───────────────────────────────────────────
+    # ── 2j: Advanced pooling figures ───────────────────────────────────────────
     # Paper: fig_advanced_pooling_comparison.pdf (App. P)
     # Depends on: 1e checkpoint (probe_results.json in advanced_pool/<ts>/)
     # No GPU — pure figure generation from saved JSON
     ADVANCED_POOL_CHECK=$(ls "$ARTIFACTS/advanced_pool"/*/probe_results.json 2>/dev/null | tail -1)
     if [ -n "$ADVANCED_POOL_CHECK" ]; then
-        run_step "2g_advanced_pooling_figure" \
+        run_step "2j_advanced_pooling_figure" \
             $CONDA python "$NOTEBOOKS/generate_advanced_pooling_figure.py"
     else
         echo ""
-        echo "  [2g] SKIPPED — no advanced_pool/*/probe_results.json found (run phase 1e first)"
+        echo "  [2j] SKIPPED — no advanced_pool/*/probe_results.json found (run phase 1e first)"
     fi
 
 fi  # END PHASE 2

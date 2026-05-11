@@ -1,0 +1,120 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║         EMNLP 2026 — Quick Start Guide (May 25 Deadline)                   ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+THREE COMMANDS TO RUN THE FULL PIPELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. conda activate sae
+
+2. cd /Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection
+
+3. ./run_all.sh
+
+EXPECTED TIME: 4 hours (A100) or 5-6 hours (MPS)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEY FACTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Status: All code created and ready to run
+✅ Papers: Both compile successfully (218 KB + 300 KB)
+✅ New experiments: 5 experiments created for EMNLP
+✅ Figures: All required figures exist or will be generated
+✅ Timeline: Ready for VM execution immediately
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT GETS GENERATED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 1 (GPU, ~3-4 hours):
+  → Mean-pool activations (3584-dim tensors)
+  → SAE feature activations
+  → Token position analysis
+
+PHASE 2 (CPU, ~30 min):
+  → 15+ publication-quality figures (PDFs)
+  → AUROC tables and statistics
+  → Cross-dataset validation results
+  → SAE feature loading analysis
+  → Both papers compile to final PDFs
+
+NEW ⭐:
+  → fig_patch_length_by_cwe.pdf (injection vs memory-corruption patch asymmetry)
+  → fig_global_anomaly_baselines.pdf (anomaly detection fails)
+  → SVEN cross-dataset direction transfer validation
+  → SAE feature-to-direction loading analysis
+  → Generation steering framework (GPU-ready)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ALTERNATIVE COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Skip GPU (use pre-computed activations):
+  ./run_all.sh --no-gpu
+
+GPU only (skip CPU experiments):
+  ./run_all.sh --gpu-only
+
+Individual new experiments:
+  bash scripts/patch_length_analysis.sh
+  bash scripts/run_global_baselines.sh
+  bash scripts/direction_transfer_sven.sh
+  bash scripts/causal_patching.sh
+  bash scripts/directional_readout_probe.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILES TO REVIEW AFTER EXECUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Papers (final submission):
+  ../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/
+    ├── paper_0_confounding/paper_0.pdf ✓
+    └── paper_1_mechanistic/paper_1.pdf ✓
+
+Figures (referenced in papers):
+  ../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures/
+    ├── fig_patch_length_by_cwe.pdf ⭐
+    ├── fig_direction_cosine_sim.pdf ✓
+    ├── fig_causal_patching.pdf ✓
+    ├── fig_directional_readout_comparison.pdf ✓
+    └── [11 other figures]
+
+Logs (check for errors):
+  logs/*.log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q: "No mean_pool runs found"
+A: Run full ./run_all.sh first (Phase 1 generates them)
+
+Q: "torch not found"
+A: conda activate sae (environment not activated)
+
+Q: Papers don't compile
+A: cd paper_0_confounding && pdflatex paper_0.tex
+
+Q: Missing figures in paper
+A: Check ../figures/ directory exists and has PDFs
+
+Q: How long will this take?
+A: ~4 hours total (3h GPU Phase 1 + 30min CPU Phase 2)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DETAILED GUIDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+See: EMNLP_PIPELINE_GUIDE.md (comprehensive setup & execution guide)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Status: ✅ READY FOR IMMEDIATE EXECUTION
+Last Updated: April 25, 2026
