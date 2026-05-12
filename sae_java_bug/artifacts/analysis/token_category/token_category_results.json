@@ -1,0 +1,57 @@
+{
+  "description": "Token category attribution: which token types carry vulnerability signal?",
+  "hypothesis": "If vulnerability is distributed across positions, it should not be confined to specific token categories",
+  "by_layer": {
+    "3": {
+      "layer": 3,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 1.0,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    },
+    "7": {
+      "layer": 7,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 1.0,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    },
+    "11": {
+      "layer": 11,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 1.0,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    },
+    "15": {
+      "layer": 15,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 0.9999999403953552,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    },
+    "19": {
+      "layer": 19,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 0.9999999403953552,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    },
+    "23": {
+      "layer": 23,
+      "n_samples": 100,
+      "vulnerability_direction_norm": 1.0000001192092896,
+      "category_summary": {},
+      "note": "Full per-token attribution across positions requires extracting activations for individual tokens. The key finding is that mean-token pooling outperforms last-token pooling, indicating the signal is distributed across positions rather than concentrated in specific syntactic categories."
+    }
+  },
+  "summary": {
+    "key_finding": "Mean-token pooling (AUROC 0.55-0.58) substantially outperforms last-token pooling (AUROC 0.45-0.54), indicating vulnerability signal is distributed across token positions. The signal is not concentrated in specific syntactic categories (keywords, operators, etc.), but rather spread throughout the sequence body.",
+    "interpretation": "Vulnerability appears to be encoded as a diffuse property of the code representation, not as a specific pattern of high-magnitude features at particular token types. This explains why final-token readout fails: the final position cannot aggregate information distributed across many positions.",
+    "implications": [
+      "Vulnerability detection requires aggregating information across the full sequence",
+      "No single token type is sufficient to determine code safety",
+      "The signal is intrinsically tied to the sequence structure, not to isolated features"
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+# SAE-Java-Bug-Detection Cleanup Summary
+
+## What I Found
+
+### Scripts (45 total files)
+- **4 helper scripts**: Main pipeline orchestrators (keep)
+- **27 shell scripts**: Individual experiment wrappers (archive)
+- **14 experimental Python**: One-off analyses (archive)
+- **4 reviewer response**: Issue investigations (archive)
+- **1 new**: paired_ranking_task.py (keep - validates paper)
+
+### Artifacts (~76 GB)
+- **17 GB essential**: Paper figures, validation sets
+- **7.7 GB garbage**: TOPK, TO_UPLOAD (delete immediately - safe!)
+- **52 GB conditional**: BigVul, per_token analysis (archive if not in paper)
+
+---
+
+## Three Documentation Files Created
+
+### 1. **CLEANUP_PLAN.md** (Detailed Strategy)
+- What to keep/archive by category
+- Artifact cleanup tiers with sizes
+- Step-by-step implementation guide
+- Verification checklist
+
+### 2. **SCRIPTS_INVENTORY.md** (Quick Reference)
+- Complete inventory of all 45 scripts
+- Before/after directory structure
+- What each script does
+- FAQ & verification steps
+
+### 3. **scripts/cleanup.sh** (Automated Cleanup)
+- One-command script archival
+- Optional artifact cleaning
+- Safety checks and confirmations
+- Generates archive README automatically
+
+---
+
+## How to Use
+
+### Quick Start (Recommended)
+```bash
+cd /Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection
+
+# 1. Review the plan
+cat CLEANUP_PLAN.md       # Full strategy
+cat SCRIPTS_INVENTORY.md  # What each script does
+
+# 2. Run cleanup
+./scripts/cleanup.sh                    # Move scripts only (safe)
+./scripts/cleanup.sh --clean-artifacts tier1  # Also delete 7.7GB trash
+
+# 3. Test
+./run_all.sh --no-gpu                   # Verify pipeline still works
+
+# 4. Commit
+git add -A && git commit -m "chore: cleanup experimental scripts"
+```
+
+### Manual Approach (if you want fine control)
+Follow the step-by-step instructions in CLEANUP_PLAN.md sections 1-5.
+
+---
+
+## Impact
+
+### After Cleanup
+```
+Freed space:     ~7.7 GB immediately (safe deletion)
+Freed if tier2:  ~52 GB additional (conditional)
+Code clutter:    Reduced from 45 to ~9 main scripts
+Reproducibility: Preserved (all scripts still accessible in _archive/)
+```
+
+### Before/After Structure
+```
+Before:
+scripts/
+├── run_all.sh                  (1 of 31 .sh files)
+├── mean_pool_probe.sh          ← experimental
+├── causal_patching.sh          ← experimental
+├── ... (24 more experimental .sh files)
+├── paired_ranking_task.py      (1 of 18 .py files)
+├── 01_stronger_pooling_baselines.py ← experimental
+├── issue_01_cv_leakage_minimal.py   ← reviewer response
+└── ... (14 more mixed .py files)
+
+After:
+scripts/
+├── run_all.sh                      ✓ Main pipeline
+├── run_all_response_experiments.sh  ✓ Reviewer response batch
+├── run_global_baselines.sh         ✓ Global anomaly detection
+├── run_multi_dataset.sh            ✓ External validation
+├── run_sae_exploration.sh          ✓ SAE feature analysis
+├── paired_ranking_task.py          ✓ Paper validation
+├── cleanup.sh                      ✓ Cleanup utility
+├── _archive/
+│   ├── experimental/    (23 .sh + 14 .py)
+│   ├── reviewer_response/ (4 .py)
+│   └── README.md
+└── [other config files]
+```
+
+---
+
+## Key Points
+
+✅ **Safe to do**: The cleanup.sh script handles all the heavy lifting
+✅ **No breaking changes**: run_all.sh calls notebooks directly, not .sh wrappers
+✅ **Reversible**: Everything is in Git history - can restore with git checkout
+✅ **Well-documented**: Three complementary guides for different needs
+✅ **Optional tiers**: Move scripts now, decide on artifacts later
+
+---
+
+## Next Steps
+
+1. **Read** CLEANUP_PLAN.md for full context (5 min read)
+2. **Run** ./scripts/cleanup.sh (automated, 1 min)
+3. **Verify** ./run_all.sh --no-gpu still works (10 min)
+4. **Commit** changes to git (optional: delete tier1 artifacts)
+
+That's it! You'll have a much cleaner repo with zero loss of functionality.
+
+---
+
+Created: 2026-05-12
+Status: Ready to deploy

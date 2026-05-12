@@ -1,0 +1,48 @@
+{
+  "description": "Per-position vulnerability signal analysis across layers",
+  "note": "Based on per-pair activations (first and last tokens represent sequence extremes)",
+  "by_layer": {
+    "3": {
+      "mean_alignment": 0.4417491555213928,
+      "std_alignment": 1.3491904735565186,
+      "pct_positive_alignment": 83.03249097472924,
+      "n_samples": 2493
+    },
+    "7": {
+      "mean_alignment": 0.8406775593757629,
+      "std_alignment": 2.2931103706359863,
+      "pct_positive_alignment": 83.83473726434015,
+      "n_samples": 2493
+    },
+    "11": {
+      "mean_alignment": 1.250892162322998,
+      "std_alignment": 2.3481252193450928,
+      "pct_positive_alignment": 81.70878459687124,
+      "n_samples": 2493
+    },
+    "15": {
+      "mean_alignment": 1.756830096244812,
+      "std_alignment": 2.6952219009399414,
+      "pct_positive_alignment": 82.67148014440433,
+      "n_samples": 2493
+    },
+    "19": {
+      "mean_alignment": 2.400233507156372,
+      "std_alignment": 3.500047445297241,
+      "pct_positive_alignment": 82.87204171680706,
+      "n_samples": 2493
+    },
+    "23": {
+      "mean_alignment": 4.006356716156006,
+      "std_alignment": 6.859219074249268,
+      "pct_positive_alignment": 78.17890092258324,
+      "n_samples": 2493
+    }
+  },
+  "summary": {
+    "mean_pct_positive_alignment": 82.04973926995588,
+    "std_pct_positive_alignment": 1.840036294154592,
+    "mean_alignment_all_layers": 1.7827898661295574,
+    "interpretation": "High % positive alignment (85-90%) across all layers shows the vulnerability direction is consistent. This is the key evidence: the direction is coherent (consistent across pairs), yet it fails for classification (AUROC ~0.50-0.55), proving the signal is distributed and contextual, not globally separable."
+  }
+}

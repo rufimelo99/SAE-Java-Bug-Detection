@@ -38,8 +38,8 @@ import numpy as np
 import torch
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-HERE       = Path(__file__).parent
-ARTIFACTS  = Path(__file__).parents[2] / "artifacts" / "activations"
+HERE = Path(__file__).parent
+ARTIFACTS = Path(__file__).parents[2] / "artifacts" / "activations"
 PAPER_FIGS = (
     Path(__file__).parents[4]
     / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
@@ -48,23 +48,43 @@ PAPER_FIGS = (
 PAPER_FIGS.mkdir(parents=True, exist_ok=True)
 
 LAYERS = [0, 3, 7, 11, 15, 19, 23, 27]
-SEED   = 42
+SEED = 42
 
 C_EXTS = {"c", "cc", "cpp", "h"}
 
+# ── CWE Families (from paper) ──────────────────────────────────────────────────
+CWE_FAMILIES = {
+    "Memory Safety": [
+        "CWE-119",
+        "CWE-120",
+        "CWE-125",
+        "CWE-787",
+        "CWE-416",
+        "CWE-415",
+        "CWE-401",
+        "CWE-476",
+    ],
+    "Injection": ["CWE-79", "CWE-89", "CWE-78", "CWE-94"],
+    "Resource Management": ["CWE-400", "CWE-399", "CWE-362"],
+    "Information Disclosure": ["CWE-200"],
+}
+
 # ── Style ─────────────────────────────────────────────────────────────────────
-mpl.rcParams.update({
-    "font.family":     "serif",
-    "font.size":       9,
-    "axes.titlesize":  9,
-    "axes.labelsize":  9,
-    "xtick.labelsize": 8,
-    "ytick.labelsize": 8,
-    "legend.fontsize": 8,
-    "figure.dpi":      150,
-    "pdf.fonttype":    42,
-    "ps.fonttype":     42,
-})
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.size": 9,
+        "axes.titlesize": 9,
+        "axes.labelsize": 9,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 8,
+        "figure.dpi": 150,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+    }
+)
+
 
 # ── Tensor loading (NumPy 2.x workaround) ─────────────────────────────────────
 def _t2np(t: "torch.Tensor") -> np.ndarray:
@@ -82,8 +102,10 @@ def find_latest_mean_pool_run() -> Path:
 
 
 def load_layer(run_dir: Path, layer: int) -> tuple[np.ndarray, np.ndarray]:
-    safe = _t2np(torch.load(run_dir / f"safe_layer_{layer}.pt",       weights_only=True))
-    vuln = _t2np(torch.load(run_dir / f"vulnerable_layer_{layer}.pt", weights_only=True))
+    safe = _t2np(torch.load(run_dir / f"safe_layer_{layer}.pt", weights_only=True))
+    vuln = _t2np(
+        torch.load(run_dir / f"vulnerable_layer_{layer}.pt", weights_only=True)
+    )
     return safe, vuln
 
 
@@ -120,9 +142,15 @@ def fig_cosine_heatmap(cos_global: np.ndarray, cos_c: np.ndarray, out_path: Path
         for i in range(len(LAYERS)):
             for j in range(len(LAYERS)):
                 v = mat[i, j]
-                ax.text(j, i, f"{v:.2f}", ha="center", va="center",
-                        fontsize=6.5,
-                        color="white" if abs(v) > 0.65 else "black")
+                ax.text(
+                    j,
+                    i,
+                    f"{v:.2f}",
+                    ha="center",
+                    va="center",
+                    fontsize=6.5,
+                    color="white" if abs(v) > 0.65 else "black",
+                )
 
     plt.colorbar(im, ax=axes, shrink=0.80, pad=0.02, label="Cosine similarity")
     fig.suptitle(
@@ -137,7 +165,9 @@ def fig_cosine_heatmap(cos_global: np.ndarray, cos_c: np.ndarray, out_path: Path
     print(f"Saved: {out_path}")
 
 
-def fig_delta_norm(norms_per_layer: list[np.ndarray], c_mask: np.ndarray, out_path: Path):
+def fig_delta_norm(
+    norms_per_layer: list[np.ndarray], c_mask: np.ndarray, out_path: Path
+):
     ll = _layer_labels()
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.5), sharey=True)
 
@@ -150,16 +180,28 @@ def fig_delta_norm(norms_per_layer: list[np.ndarray], c_mask: np.ndarray, out_pa
         data = [norms[mask] for norms in norms_per_layer]
         means = [d.mean() for d in data]
 
-        parts = ax.violinplot(data, positions=range(len(LAYERS)),
-                              showmedians=True, showextrema=False, widths=0.7)
+        parts = ax.violinplot(
+            data,
+            positions=range(len(LAYERS)),
+            showmedians=True,
+            showextrema=False,
+            widths=0.7,
+        )
         for pc in parts["bodies"]:
             pc.set_facecolor(color)
             pc.set_alpha(0.45)
         parts["cmedians"].set_color("#1a3a6c")
         parts["cmedians"].set_linewidth(1.5)
 
-        ax.plot(range(len(LAYERS)), means, "o--", color="#1a3a6c",
-                ms=4, lw=1.2, label="Mean")
+        ax.plot(
+            range(len(LAYERS)),
+            means,
+            "o--",
+            color="#1a3a6c",
+            ms=4,
+            lw=1.2,
+            label="Mean",
+        )
 
         ax.set_xticks(range(len(LAYERS)))
         ax.set_xticklabels(ll, rotation=45)
@@ -174,7 +216,9 @@ def fig_delta_norm(norms_per_layer: list[np.ndarray], c_mask: np.ndarray, out_pa
     print(f"Saved: {out_path}")
 
 
-def fig_alignment(align_per_layer: list[np.ndarray], c_mask: np.ndarray, out_path: Path):
+def fig_alignment(
+    align_per_layer: list[np.ndarray], c_mask: np.ndarray, out_path: Path
+):
     ll = _layer_labels()
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), sharey=True)
 
@@ -184,27 +228,46 @@ def fig_alignment(align_per_layer: list[np.ndarray], c_mask: np.ndarray, out_pat
         ["Global (n=2493)", f"Within-C (n={c_mask.sum()})"],
         ["#e07b39", "#e07b39"],
     ):
-        data  = [al[mask] for al in align_per_layer]
+        data = [al[mask] for al in align_per_layer]
         means = [d.mean() for d in data]
         frac_pos = [np.mean(d > 0) for d in data]
 
-        parts = ax.violinplot(data, positions=range(len(LAYERS)),
-                              showmedians=True, showextrema=False, widths=0.7)
+        parts = ax.violinplot(
+            data,
+            positions=range(len(LAYERS)),
+            showmedians=True,
+            showextrema=False,
+            widths=0.7,
+        )
         for pc in parts["bodies"]:
             pc.set_facecolor(color)
             pc.set_alpha(0.45)
         parts["cmedians"].set_color("#8b3a00")
         parts["cmedians"].set_linewidth(1.5)
 
-        ax.plot(range(len(LAYERS)), means, "s--", color="#8b3a00",
-                ms=4, lw=1.2, label="Mean")
+        ax.plot(
+            range(len(LAYERS)),
+            means,
+            "s--",
+            color="#8b3a00",
+            ms=4,
+            lw=1.2,
+            label="Mean",
+        )
         ax.axhline(0, color="grey", lw=0.8, ls=":", alpha=0.6)
 
         # Annotate fraction with positive alignment above the violin
         y_top = max(np.percentile(d, 97) for d in data) * 1.08
         for xi, fp in enumerate(frac_pos):
-            ax.text(xi, y_top, f"{fp:.0%}", ha="center", va="bottom",
-                    fontsize=6.5, color="#1a3a6c")
+            ax.text(
+                xi,
+                y_top,
+                f"{fp:.0%}",
+                ha="center",
+                va="bottom",
+                fontsize=6.5,
+                color="#1a3a6c",
+            )
 
         ax.set_xticks(range(len(LAYERS)))
         ax.set_xticklabels(ll, rotation=45)
@@ -231,7 +294,7 @@ def fig_direction_summary(
     out_path: Path,
 ):
     """
-    Two-panel summary figure:
+    Two-panel summary figure (C-only):
       A (left)  — Mean paired distance ||δ||₂ across layers
       B (right) — Fraction of pairs with positive alignment across layers
     """
@@ -239,55 +302,237 @@ def fig_direction_summary(
     ll = _layer_labels()
     xs = list(range(n_layers))
 
-    fig, (ax_norm, ax_aln) = plt.subplots(1, 2, figsize=(9, 3.8),
-                                           gridspec_kw={"wspace": 0.38})
+    fig, (ax_norm, ax_aln) = plt.subplots(
+        1, 2, figsize=(9, 3.8), gridspec_kw={"wspace": 0.38}
+    )
 
     # ── Panel A: mean ||δ||₂ trajectory ──────────────────────────────────────
-    means_all = [n.mean()          for n in norms_per_layer]
-    means_c   = [n[c_mask].mean()  for n in norms_per_layer]
-    stds_all  = [n.std()           for n in norms_per_layer]
-    stds_c    = [n[c_mask].std()   for n in norms_per_layer]
+    means_c = [n[c_mask].mean() for n in norms_per_layer]
+    stds_c = [n[c_mask].std() for n in norms_per_layer]
 
-    ax_norm.plot(xs, means_all, "o-", color="#4878cf", lw=1.5, ms=5, label="Global")
-    ax_norm.fill_between(xs,
-                         [m - s for m, s in zip(means_all, stds_all)],
-                         [m + s for m, s in zip(means_all, stds_all)],
-                         color="#4878cf", alpha=0.15)
-    ax_norm.plot(xs, means_c, "s--", color="#e07b39", lw=1.2, ms=4, label="Within-C")
-    ax_norm.fill_between(xs,
-                         [m - s for m, s in zip(means_c, stds_c)],
-                         [m + s for m, s in zip(means_c, stds_c)],
-                         color="#e07b39", alpha=0.12)
+    ax_norm.plot(xs, means_c, "o-", color="#4878cf", lw=1.5, ms=5)
+    ax_norm.fill_between(
+        xs,
+        [m - s for m, s in zip(means_c, stds_c)],
+        [m + s for m, s in zip(means_c, stds_c)],
+        color="#4878cf",
+        alpha=0.15,
+    )
     ax_norm.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
 
     ax_norm.set_xticks(xs)
     ax_norm.set_xticklabels(ll, rotation=45)
     ax_norm.set_xlabel("Layer")
     ax_norm.set_ylabel(r"Mean $\|\delta_i^L\|_2$")
-    ax_norm.set_title("(A) Paired representation distance\n", fontsize=8)
-    ax_norm.legend(fontsize=7, loc="upper left")
+    ax_norm.set_title("(Left) Paired representation distance\n", fontsize=8)
 
     # ── Panel B: fraction positive alignment ──────────────────────────────────
-    frac_all = [np.mean(a          > 0) for a in align_per_layer]
-    frac_c   = [np.mean(a[c_mask]  > 0) for a in align_per_layer]
+    frac_c = [np.mean(a[c_mask] > 0) for a in align_per_layer]
 
-    ax_aln.plot(xs, frac_all, "o-", color="#4878cf", lw=1.5, ms=5, label="Global")
-    ax_aln.plot(xs, frac_c,   "s--", color="#e07b39", lw=1.2, ms=4, label="Within-C")
-    ax_aln.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance")
+    ax_aln.plot(xs, frac_c, "o-", color="#4878cf", lw=1.5, ms=5)
+    ax_aln.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)")
     ax_aln.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
-    ax_aln.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.06, label="Stable plateau")
+    ax_aln.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.06)
 
     ax_aln.set_xticks(xs)
     ax_aln.set_xticklabels(ll, rotation=45)
     ax_aln.set_xlabel("Layer")
     ax_aln.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$")
-    ax_aln.set_title("(B) Per-pair alignment to vulnerability direction\n", fontsize=8)
+    ax_aln.set_title(
+        "(Right) Per-pair alignment to vulnerability direction\n", fontsize=8
+    )
     ax_aln.set_ylim(0.45, 0.95)
     ax_aln.legend(fontsize=7, loc="lower left")
 
     fig.suptitle(
-        "Cross-layer vulnerability direction geometry (mean-token pooling, raw residual stream)",
-        fontsize=9, y=1.02,
+        "Direction geometry across layers (C, n="
+        + str(c_mask.sum())
+        + ", mean-token pooling)",
+        fontsize=9,
+        y=1.02,
+    )
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+
+
+# ── Per-family direction geometry ──────────────────────────────────────────────
+def fig_direction_per_family(
+    align_per_layer: list[np.ndarray],
+    c_mask: np.ndarray,
+    meta: list,
+    out_path: Path,
+):
+    """
+    Per-CWE-family alignment breakdown across layers.
+    """
+    n_layers = len(LAYERS)
+    ll = _layer_labels()
+    xs = list(range(n_layers))
+
+    # Build family masks
+    family_masks = {}
+    for family_name, cwe_list in CWE_FAMILIES.items():
+        family_mask = np.array(
+            [c_mask[i] and meta[i].get("cwe") in cwe_list for i in range(len(meta))]
+        )
+        if family_mask.sum() > 0:  # Only include families with samples
+            family_masks[family_name] = family_mask
+
+    # Color palette
+    colors = {
+        "Memory Safety": "#4878cf",
+        "Injection": "#e07b39",
+        "Resource Management": "#6cc644",
+        "Information Disclosure": "#c71585",
+    }
+
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+
+    for family_name, family_mask in sorted(family_masks.items()):
+        frac = [np.mean(a[family_mask] > 0) for a in align_per_layer]
+        n_samples = family_mask.sum()
+        ax.plot(
+            xs,
+            frac,
+            "o-",
+            color=colors.get(family_name, "#999999"),
+            lw=1.5,
+            ms=5,
+            label=f"{family_name} (n={n_samples})",
+        )
+
+    ax.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)")
+    ax.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+    ax.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.04)
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(ll, rotation=45)
+    ax.set_xlabel("Layer", fontsize=9)
+    ax.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$", fontsize=9)
+    ax.set_ylim(0.45, 0.95)
+    ax.legend(fontsize=8, loc="lower left", framealpha=0.95)
+
+    ax.set_title(
+        "Per-pair alignment across vulnerability families (C only, mean-token pooling)",
+        fontsize=9,
+        pad=10,
+    )
+
+    fig.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+
+
+# ── Combined comprehensive figure ──────────────────────────────────────────────
+def fig_direction_comprehensive(
+    norms_per_layer: list[np.ndarray],
+    align_per_layer: list[np.ndarray],
+    c_mask: np.ndarray,
+    meta: list,
+    out_path: Path,
+):
+    """
+    Three-panel comprehensive direction geometry figure:
+      A (left)   — Mean paired distance ||δ||₂ across layers
+      B (middle) — Global alignment across layers
+      C (right)  — Per-family alignment breakdown
+    """
+    n_layers = len(LAYERS)
+    ll = _layer_labels()
+    xs = list(range(n_layers))
+
+    fig = plt.figure(figsize=(16, 3.8))
+    gs = fig.add_gridspec(1, 3, wspace=0.32, width_ratios=[1, 1, 1.1])
+    ax_norm = fig.add_subplot(gs[0, 0])
+    ax_aln_global = fig.add_subplot(gs[0, 1])
+    ax_aln_family = fig.add_subplot(gs[0, 2])
+
+    # ── Panel A: Mean paired distance ──────────────────────────────────────────
+    means_c = [n[c_mask].mean() for n in norms_per_layer]
+    stds_c = [n[c_mask].std() for n in norms_per_layer]
+
+    ax_norm.plot(xs, means_c, "o-", color="#4878cf", lw=1.5, ms=5)
+    ax_norm.fill_between(
+        xs,
+        [m - s for m, s in zip(means_c, stds_c)],
+        [m + s for m, s in zip(means_c, stds_c)],
+        color="#4878cf",
+        alpha=0.15,
+    )
+    ax_norm.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+
+    ax_norm.set_xticks(xs)
+    ax_norm.set_xticklabels(ll, rotation=45)
+    ax_norm.set_xlabel("Layer")
+    ax_norm.set_ylabel(r"Mean $\|\delta_i^L\|_2$")
+    ax_norm.set_title("(A) Paired representation distance", fontsize=8)
+
+    # ── Panel B: Global alignment ──────────────────────────────────────────────
+    frac_c = [np.mean(a[c_mask] > 0) for a in align_per_layer]
+
+    ax_aln_global.plot(xs, frac_c, "o-", color="#4878cf", lw=1.5, ms=5)
+    ax_aln_global.axhline(
+        0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)"
+    )
+    ax_aln_global.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+    ax_aln_global.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.06)
+
+    ax_aln_global.set_xticks(xs)
+    ax_aln_global.set_xticklabels(ll, rotation=45)
+    ax_aln_global.set_xlabel("Layer")
+    ax_aln_global.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$")
+    ax_aln_global.set_title("(B) Global per-pair alignment", fontsize=8)
+    ax_aln_global.set_ylim(0.45, 0.95)
+    ax_aln_global.legend(fontsize=7, loc="lower left")
+
+    # ── Panel C: Per-family alignment ──────────────────────────────────────────
+    family_masks = {}
+    for family_name, cwe_list in CWE_FAMILIES.items():
+        family_mask = np.array(
+            [c_mask[i] and meta[i].get("cwe") in cwe_list for i in range(len(meta))]
+        )
+        if family_mask.sum() > 0:  # Only include families with samples
+            family_masks[family_name] = family_mask
+
+    colors = {
+        "Memory Safety": "#4878cf",
+        "Injection": "#e07b39",
+        "Resource Management": "#6cc644",
+        "Information Disclosure": "#c71585",
+    }
+
+    for family_name, family_mask in sorted(family_masks.items()):
+        frac = [np.mean(a[family_mask] > 0) for a in align_per_layer]
+        ax_aln_family.plot(
+            xs,
+            frac,
+            "o-",
+            color=colors.get(family_name, "#999999"),
+            lw=1.5,
+            ms=5,
+            label=family_name,
+        )
+
+    ax_aln_family.axhline(
+        0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)"
+    )
+    ax_aln_family.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+    ax_aln_family.axvspan(1, n_layers - 2, color="#4878cf", alpha=0.04)
+
+    ax_aln_family.set_xticks(xs)
+    ax_aln_family.set_xticklabels(ll, rotation=45)
+    ax_aln_family.set_xlabel("Layer")
+    ax_aln_family.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$")
+    ax_aln_family.set_title("(C) Per-family alignment", fontsize=8)
+    ax_aln_family.set_ylim(0.45, 0.95)
+    ax_aln_family.legend(fontsize=7, loc="lower left", framealpha=0.95)
+
+    fig.suptitle(
+        "Direction geometry across layers (C, n=" + str(c_mask.sum()) + ")",
+        fontsize=9,
+        y=1.02,
     )
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
@@ -309,13 +554,15 @@ def main():
     c_mask = np.array([ext in C_EXTS for ext in extensions])
     print(f"  n={len(meta)}, C={c_mask.sum()}, other={len(meta)-c_mask.sum()}")
 
-    dirs_global:     list[np.ndarray] = []
-    dirs_c:          list[np.ndarray] = []
+    dirs_global: list[np.ndarray] = []
+    dirs_c: list[np.ndarray] = []
     norms_per_layer: list[np.ndarray] = []
     align_per_layer: list[np.ndarray] = []
 
-    print(f"\n{'Layer':>6}  {'||d_glob||':>10}  {'frac+_glob':>10}  "
-          f"{'frac+_C':>9}  {'mean_norm':>10}  {'mean_norm_C':>12}")
+    print(
+        f"\n{'Layer':>6}  {'||d_glob||':>10}  {'frac+_glob':>10}  "
+        f"{'frac+_C':>9}  {'mean_norm':>10}  {'mean_norm_C':>12}"
+    )
     print("-" * 70)
 
     for layer in LAYERS:
@@ -327,31 +574,33 @@ def main():
 
         # ── Vulnerability directions
         d_glob = vuln_direction(safe, vuln)
-        d_c    = vuln_direction(safe[c_mask], vuln[c_mask])
+        d_c = vuln_direction(safe[c_mask], vuln[c_mask])
         dirs_global.append(d_glob)
         dirs_c.append(d_c)
 
         # ── Paired delta
-        delta = vuln - safe                       # [N, 3584]
-        norms = np.linalg.norm(delta, axis=1)     # [N]
+        delta = vuln - safe  # [N, 3584]
+        norms = np.linalg.norm(delta, axis=1)  # [N]
         norms_per_layer.append(norms)
 
         # ── Alignment to GLOBAL direction (so global and C use same reference)
-        align = delta @ d_glob                    # [N]
+        align = delta @ d_glob  # [N]
         align_per_layer.append(align)
 
-        frac_pos_glob = np.mean(align      > 0)
-        frac_pos_c    = np.mean(align[c_mask] > 0)
-        mean_norm     = norms.mean()
-        mean_norm_c   = norms[c_mask].mean()
+        frac_pos_glob = np.mean(align > 0)
+        frac_pos_c = np.mean(align[c_mask] > 0)
+        mean_norm = norms.mean()
+        mean_norm_c = norms[c_mask].mean()
 
-        print(f"  L{layer:>2}   {np.linalg.norm(d_glob):>10.4f}  "
-              f"{frac_pos_glob:>10.3f}  {frac_pos_c:>9.3f}  "
-              f"{mean_norm:>10.3f}  {mean_norm_c:>12.3f}")
+        print(
+            f"  L{layer:>2}   {np.linalg.norm(d_glob):>10.4f}  "
+            f"{frac_pos_glob:>10.3f}  {frac_pos_c:>9.3f}  "
+            f"{mean_norm:>10.3f}  {mean_norm_c:>12.3f}"
+        )
 
     # ── Cosine similarity matrices
     cos_global = cosine_matrix(dirs_global)
-    cos_c      = cosine_matrix(dirs_c)
+    cos_c = cosine_matrix(dirs_c)
 
     print("\nCosine similarity matrix — GLOBAL directions:")
     print(np.round(cos_global, 3))
@@ -365,16 +614,18 @@ def main():
         print(f"  L{layer}: {c:.4f}")
 
     # ── Figures
-    fig_direction_summary(
-        norms_per_layer, align_per_layer, c_mask,
+    fig_direction_comprehensive(
+        norms_per_layer,
+        align_per_layer,
+        c_mask,
+        meta,
         PAPER_FIGS / "fig_direction_summary.pdf",
     )
-    fig_cosine_heatmap(cos_global, cos_c,
-                       PAPER_FIGS / "fig_direction_cosine_sim.pdf")
-    fig_delta_norm(norms_per_layer, c_mask,
-                   PAPER_FIGS / "fig_delta_norm_trajectory.pdf")
-    fig_alignment(align_per_layer, c_mask,
-                  PAPER_FIGS / "fig_alignment_trajectory.pdf")
+    fig_cosine_heatmap(cos_global, cos_c, PAPER_FIGS / "fig_direction_cosine_sim.pdf")
+    fig_delta_norm(
+        norms_per_layer, c_mask, PAPER_FIGS / "fig_delta_norm_trajectory.pdf"
+    )
+    fig_alignment(align_per_layer, c_mask, PAPER_FIGS / "fig_alignment_trajectory.pdf")
 
 
 if __name__ == "__main__":

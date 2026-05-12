@@ -1,0 +1,162 @@
+{
+  "description": "Comparison of standard StratifiedKFold vs pair-stratified CV",
+  "n_bootstrap": 500,
+  "n_components_pca": 50,
+  "cv_folds": 5,
+  "by_layer": {
+    "0": {
+      "standard_cv": {
+        "roc_auc": 0.44482952882644744,
+        "ci_lo": 0.42939894106961585,
+        "ci_hi": 0.4601461943974097,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.524622943441569,
+        "ci_lo": 0.5081454034219035,
+        "ci_hi": 0.5409167706995904,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.07979341461512157,
+      "delta_pct": 17.93797611090099
+    },
+    "3": {
+      "standard_cv": {
+        "roc_auc": 0.5397101749442518,
+        "ci_lo": 0.5242619679973236,
+        "ci_hi": 0.5546743239272057,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5770669210984642,
+        "ci_lo": 0.5616946401036321,
+        "ci_hi": 0.5918806663896857,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.03735674615421247,
+      "delta_pct": 6.921630884218768
+    },
+    "7": {
+      "standard_cv": {
+        "roc_auc": 0.4955911921757558,
+        "ci_lo": 0.4797565888504429,
+        "ci_hi": 0.5112717957491354,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5499444335086935,
+        "ci_lo": 0.533988331306316,
+        "ci_hi": 0.5652867975185263,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.054353241332937674,
+      "delta_pct": 10.967354180431421
+    },
+    "11": {
+      "standard_cv": {
+        "roc_auc": 0.4966446225441508,
+        "ci_lo": 0.47937542828291363,
+        "ci_hi": 0.5121419575457768,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5496017131418995,
+        "ci_lo": 0.5333632384493525,
+        "ci_hi": 0.5677441408593875,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.052957090597748724,
+      "delta_pct": 10.662974729589655
+    },
+    "15": {
+      "standard_cv": {
+        "roc_auc": 0.5137055001637222,
+        "ci_lo": 0.4972097947734339,
+        "ci_hi": 0.5296196921228316,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5628227931088721,
+        "ci_lo": 0.5465153960667831,
+        "ci_hi": 0.5784286384367802,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.04911729294514988,
+      "delta_pct": 9.56137182286267
+    },
+    "19": {
+      "standard_cv": {
+        "roc_auc": 0.522856431304531,
+        "ci_lo": 0.5046036065327225,
+        "ci_hi": 0.5397460549183056,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5697577016829874,
+        "ci_lo": 0.5521582701143929,
+        "ci_hi": 0.5850877532958091,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.04690127037845648,
+      "delta_pct": 8.970200531231383
+    },
+    "23": {
+      "standard_cv": {
+        "roc_auc": 0.4970294298203777,
+        "ci_lo": 0.4806847907949122,
+        "ci_hi": 0.5113366875522855,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.556293332509432,
+        "ci_lo": 0.5410655964373209,
+        "ci_hi": 0.571618705947989,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.05926390268905435,
+      "delta_pct": 11.923620440437869
+    },
+    "27": {
+      "standard_cv": {
+        "roc_auc": 0.4888580931381205,
+        "ci_lo": 0.47396153233633764,
+        "ci_hi": 0.5051731396231665,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "pair_stratified_cv": {
+        "roc_auc": 0.5487449818612904,
+        "ci_lo": 0.532659129946497,
+        "ci_hi": 0.5641098780016054,
+        "n_pairs": 2493,
+        "n_folds_used": 5
+      },
+      "delta_auroc": 0.059886888723169884,
+      "delta_pct": 12.250362541558582
+    }
+  },
+  "summary": {
+    "mean_delta_auroc": 0.05495373092948138,
+    "std_delta_auroc": 0.011580320995328528,
+    "min_delta_auroc": 0.03735674615421247,
+    "max_delta_auroc": 0.07979341461512157,
+    "mean_pair_stratified_auroc": 0.5548568525441511,
+    "max_pair_stratified_auroc": 0.5770669210984642,
+    "layer_with_max_auroc": 3,
+    "interpretation": "If delta is close to zero, pair-stratified CV gives similar results to standard CV, suggesting no major leakage. If delta is substantially negative, pair-stratified CV is more conservative (harder problem), indicating potential leakage in standard CV."
+  }
+}
