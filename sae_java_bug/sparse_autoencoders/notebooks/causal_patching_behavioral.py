@@ -44,11 +44,12 @@ import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-ARTIFACTS    = Path(__file__).parents[2] / "artifacts"
-ACT_DIR      = ARTIFACTS / "activations"
-OUT_DIR      = ARTIFACTS / "causal_patching"
+ARTIFACTS = Path(__file__).parents[2] / "artifacts"
+ACT_DIR = ARTIFACTS / "activations"
+OUT_DIR = ARTIFACTS / "causal_patching"
 SOURCE_JSONL = (
-    ACT_DIR / "raw_activations"
+    ACT_DIR
+    / "raw_activations"
     / "vulnerable_code_qwen_coder_standard_16384_raw"
     / "activations_layer_0_raw_component_hidden_state_last_token.jsonl"
 )
@@ -60,39 +61,73 @@ PAPER_FIGS = (
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 PAPER_FIGS.mkdir(parents=True, exist_ok=True)
 
-MODEL_ID     = "Qwen/Qwen2.5-7B-Instruct"
+MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 PATCH_LAYERS = [0, 3, 7, 11, 15, 19, 23, 27]
-MAX_TOKENS   = 512
-SEED         = 42
+MAX_TOKENS = 512
+SEED = 42
 
 # Security-relevant token strings for Experiment C.
 # Only strings that tokenize as a single token (model-dependent) will be used.
 SECURITY_VOCAB_STRINGS = [
     # C / C++ memory safety
-    "NULL", "nullptr", "assert", "bounds", "sizeof",
-    "malloc", "calloc", "realloc", "free",
+    "NULL",
+    "nullptr",
+    "assert",
+    "bounds",
+    "sizeof",
+    "malloc",
+    "calloc",
+    "realloc",
+    "free",
     # Input validation (language-agnostic)
-    "validate", "valid", "check", "verify",
-    "sanitize", "sanitise", "filter", "escape", "encode",
+    "validate",
+    "valid",
+    "check",
+    "verify",
+    "sanitize",
+    "sanitise",
+    "filter",
+    "escape",
+    "encode",
     # Error handling
-    "error", "Error", "errno", "throw", "catch",
+    "error",
+    "Error",
+    "errno",
+    "throw",
+    "catch",
     # PHP / web security
-    "htmlspecialchars", "htmlentities", "PDO",
-    "bindParam", "bindValue", "prepared", "prepare",
+    "htmlspecialchars",
+    "htmlentities",
+    "PDO",
+    "bindParam",
+    "bindValue",
+    "prepared",
+    "prepare",
     # JavaScript security
-    "parseInt", "isNaN", "isFinite", "encodeURIComponent",
+    "parseInt",
+    "isNaN",
+    "isFinite",
+    "encodeURIComponent",
 ]
 
-mpl.rcParams.update({
-    "font.family": "serif", "font.size": 9,
-    "axes.titlesize": 9, "axes.labelsize": 9,
-    "xtick.labelsize": 8, "ytick.labelsize": 8,
-    "legend.fontsize": 7, "figure.dpi": 150,
-    "pdf.fonttype": 42, "ps.fonttype": 42,
-})
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.size": 9,
+        "axes.titlesize": 9,
+        "axes.labelsize": 9,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 7,
+        "figure.dpi": 150,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+    }
+)
 
 
 # ── Data ───────────────────────────────────────────────────────────────────────
+
 
 def load_pairs(jsonl_path: Path, n_pairs: int | None = None) -> list[dict]:
     records = []
@@ -103,14 +138,24 @@ def load_pairs(jsonl_path: Path, n_pairs: int | None = None) -> list[dict]:
                 continue
             r = json.loads(line)
             try:
-                sec  = base64.b64decode(r["secure_code"]).decode("utf-8", errors="replace")
-                vuln = base64.b64decode(r["vulnerable_code"]).decode("utf-8", errors="replace")
+                sec = base64.b64decode(r["secure_code"]).decode(
+                    "utf-8", errors="replace"
+                )
+                vuln = base64.b64decode(r["vulnerable_code"]).decode(
+                    "utf-8", errors="replace"
+                )
             except Exception:
-                sec  = r.get("secure_code", "")
+                sec = r.get("secure_code", "")
                 vuln = r.get("vulnerable_code", "")
             if sec.strip() and vuln.strip():
-                records.append({"secure": sec, "vuln": vuln,
-                                "cwe": r.get("cwe", ""), "ext": r.get("ext", "")})
+                records.append(
+                    {
+                        "secure": sec,
+                        "vuln": vuln,
+                        "cwe": r.get("cwe", ""),
+                        "ext": r.get("ext", ""),
+                    }
+                )
             if n_pairs and len(records) >= n_pairs:
                 break
     return records
@@ -133,6 +178,7 @@ def get_security_vocab_ids(tokenizer) -> list[int]:
 
 # ── Hook utilities (mirrored from causal_patching.py) ─────────────────────────
 
+
 def _hidden_from_output(output):
     return output if isinstance(output, torch.Tensor) else output[0]
 
@@ -148,24 +194,40 @@ def _replace_hidden(output, new_hidden):
 def make_cache_hook(store: dict, key):
     def hook(module, inp, output):
         store[key] = _hidden_from_output(output).detach().clone()
+
     return hook
 
 
-def make_body_patch_hook(secure_act: torch.Tensor):
+def make_body_patch_hook(
+    secure_act: torch.Tensor, layer_id: int = None, debug: bool = False
+):
     """Patch all shared-prefix positions except the last token (body subset)."""
+
     def hook(module, inp, output):
-        h   = _hidden_from_output(output).clone()
+        h = _hidden_from_output(output).clone()
         T_v = h.shape[1]
         T_s = secure_act.shape[1]
         src = secure_act.to(device=h.device, dtype=h.dtype)
         end = max(min(T_v, T_s) - 1, 0)  # body = shared prefix minus final token
-        if end > 0:
+        if debug and layer_id is not None:
+            # Check if patch is actually changing anything
+            before = h[0, :5, :5].clone()
             h[0, :end, :] = src[0, :end, :]
+            after = h[0, :5, :5].clone()
+            print(f"[DEBUG L{layer_id}] Patch applied: T_v={T_v}, T_s={T_s}, end={end}")
+            print(f"  Before patch [0, 0, :5]: {before[0, :5]}")
+            print(f"  After patch [0, 0, :5]: {after[0, :5]}")
+            print(f"  Max diff: {(after - before).abs().max().item():.6f}")
+        else:
+            if end > 0:
+                h[0, :end, :] = src[0, :end, :]
         return _replace_hidden(output, h)
+
     return hook
 
 
 # ── Core measurement ───────────────────────────────────────────────────────────
+
 
 @torch.no_grad()
 def cache_secure_layers(
@@ -191,8 +253,8 @@ def cache_secure_layers(
 
 @torch.no_grad()
 def measure_forward(
-    vuln_ids: torch.Tensor,      # [1, T_v]
-    sec_ids:  torch.Tensor,      # [1, T_s]  — used as labels for Exp A
+    vuln_ids: torch.Tensor,  # [1, T_v]
+    sec_ids: torch.Tensor,  # [1, T_s]  — used as labels for Exp A
     model,
     device: torch.device,
     vocab_ids: list[int],
@@ -208,7 +270,7 @@ def measure_forward(
 
     If patch_layer and secure_cache are provided, body-patches the forward pass.
     """
-    T   = min(vuln_ids.shape[1], sec_ids.shape[1], MAX_TOKENS)
+    T = min(vuln_ids.shape[1], sec_ids.shape[1], MAX_TOKENS)
     inp = vuln_ids[:, :T].to(device)
     # labels: HuggingFace causal-LM shifts internally, so labels[i] = target at pos i
     labels = sec_ids[:, :T].to(device)
@@ -217,12 +279,14 @@ def measure_forward(
     if patch_layer is not None and secure_cache is not None:
         handles.append(
             model.model.layers[patch_layer].register_forward_hook(
-                make_body_patch_hook(secure_cache[patch_layer])
+                make_body_patch_hook(
+                    secure_cache[patch_layer], layer_id=patch_layer, debug=False
+                )
             )
         )
 
     try:
-        out = model(input_ids=inp, labels=labels)
+        out = model(input_ids=inp, labels=labels, use_cache=False)
         # Exp A: model.loss = mean cross-entropy = -mean log-prob
         exp_a = float(-out.loss.cpu())
 
@@ -239,19 +303,24 @@ def measure_forward(
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Behavioral consequences of activation patching (Exp A + C)."
     )
-    parser.add_argument("--n_pairs", type=int, default=100,
-                        help="Number of pairs to evaluate (default 100)")
+    parser.add_argument(
+        "--n_pairs",
+        type=int,
+        default=100,
+        help="Number of pairs to evaluate (default 100)",
+    )
     args = parser.parse_args()
 
     print("Loading pairs...")
     all_pairs = load_pairs(SOURCE_JSONL)
     rng = np.random.default_rng(SEED)
     rng.shuffle(all_pairs)
-    pairs = all_pairs[:args.n_pairs]
+    pairs = all_pairs[: args.n_pairs]
     print(f"  Using {len(pairs)} of {len(all_pairs)} pairs")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -260,7 +329,9 @@ def main():
     print(f"  Loading model {MODEL_ID}...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=torch.float16, device_map="auto",
+        MODEL_ID,
+        torch_dtype=torch.float16,
+        device_map="auto",
     )
     model.eval()
 
@@ -283,12 +354,16 @@ def main():
             print(f"  Pair {i + 1}/{len(pairs)}", flush=True)
         try:
             vuln_ids = tokenizer(
-                pair["vuln"], return_tensors="pt",
-                truncation=True, max_length=MAX_TOKENS,
+                pair["vuln"],
+                return_tensors="pt",
+                truncation=True,
+                max_length=MAX_TOKENS,
             ).input_ids
             sec_ids = tokenizer(
-                pair["secure"], return_tensors="pt",
-                truncation=True, max_length=MAX_TOKENS,
+                pair["secure"],
+                return_tensors="pt",
+                truncation=True,
+                max_length=MAX_TOKENS,
             ).input_ids
 
             # Pass 1: cache secure activations at all patch layers
@@ -304,8 +379,13 @@ def main():
             # Passes 3–10: one body-patched pass per layer
             for L in PATCH_LAYERS:
                 patch_a, patch_c = measure_forward(
-                    vuln_ids, sec_ids, model, device, vocab_ids,
-                    patch_layer=L, secure_cache=sec_cache,
+                    vuln_ids,
+                    sec_ids,
+                    model,
+                    device,
+                    vocab_ids,
+                    patch_layer=L,
+                    secure_cache=sec_cache,
                 )
                 deltas[L]["exp_a"].append(patch_a - base_a)
                 deltas[L]["exp_c"].append(patch_c - base_c)
@@ -327,7 +407,9 @@ def main():
     print(f"\nBaseline (unpatched vulnerable):")
     print(f"  Exp A mean log-prob: {summary['baseline']['exp_a_mean']:.4f}")
     print(f"  Exp C vocab score:   {summary['baseline']['exp_c_mean']:.4f}")
-    print(f"\n{'Layer':<7} {'ΔExp A (log-prob secure)':<28} {'ΔExp C (vocab score)':<26}")
+    print(
+        f"\n{'Layer':<7} {'ΔExp A (log-prob secure)':<28} {'ΔExp C (vocab score)':<26}"
+    )
     print("-" * 62)
 
     for L in PATCH_LAYERS:
@@ -339,13 +421,17 @@ def main():
         a_mean, a_sem = float(a.mean()), float(a.std() / np.sqrt(n))
         c_mean, c_sem = float(c.mean()), float(c.std() / np.sqrt(n))
         summary[L] = {
-            "exp_a_mean": a_mean, "exp_a_sem": a_sem,
-            "exp_c_mean": c_mean, "exp_c_sem": c_sem,
+            "exp_a_mean": a_mean,
+            "exp_a_sem": a_sem,
+            "exp_c_mean": c_mean,
+            "exp_c_sem": c_sem,
             "n": n,
         }
         sig_a = "*" if abs(a_mean) > 2 * a_sem else " "
         sig_c = "*" if abs(c_mean) > 2 * c_sem else " "
-        print(f"  L{L:<4} {a_mean:+.4f} ± {a_sem:.4f} {sig_a}   {c_mean:+.4f} ± {c_sem:.4f} {sig_c}")
+        print(
+            f"  L{L:<4} {a_mean:+.4f} ± {a_sem:.4f} {sig_a}   {c_mean:+.4f} ± {c_sem:.4f} {sig_c}"
+        )
 
     print("  (* = |mean| > 2 SEM)")
 
@@ -355,26 +441,39 @@ def main():
     print(f"\nSaved: {out_json}")
 
     # ── Figure ─────────────────────────────────────────────────────────────────
-    xs     = list(range(len(PATCH_LAYERS)))
+    xs = list(range(len(PATCH_LAYERS)))
     x_lbls = [f"L{L}" for L in PATCH_LAYERS]
     colour = "#4dac26"
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.0, 3.6))
 
     for ax, key, title, ylabel in [
-        (ax1, "exp_a",
-         "Exp A: Secure token log-prob shift",
-         "Δ mean log-prob(secure tokens | patched vuln)\n"
-         "positive → model more likely to generate secure sequence"),
-        (ax2, "exp_c",
-         "Exp C: Security vocabulary logit shift",
-         "Δ mean log-softmax(security vocab, final pos)\n"
-         "positive → higher prob of security token as next token"),
+        (
+            ax1,
+            "exp_a",
+            "Exp A: Secure token log-prob shift",
+            "Δ mean log-prob(secure tokens | patched vuln)\n"
+            "positive → model more likely to generate secure sequence",
+        ),
+        (
+            ax2,
+            "exp_c",
+            "Exp C: Security vocabulary logit shift",
+            "Δ mean log-softmax(security vocab, final pos)\n"
+            "positive → higher prob of security token as next token",
+        ),
     ]:
         means = [summary.get(L, {}).get(f"{key}_mean", 0) or 0 for L in PATCH_LAYERS]
-        sems  = [summary.get(L, {}).get(f"{key}_sem",  0) or 0 for L in PATCH_LAYERS]
-        bars  = ax.bar(xs, means, color=colour, alpha=0.80, width=0.60,
-                       yerr=sems, error_kw={"elinewidth": 1.2, "capsize": 3})
+        sems = [summary.get(L, {}).get(f"{key}_sem", 0) or 0 for L in PATCH_LAYERS]
+        bars = ax.bar(
+            xs,
+            means,
+            color=colour,
+            alpha=0.80,
+            width=0.60,
+            yerr=sems,
+            error_kw={"elinewidth": 1.2, "capsize": 3},
+        )
         # Colour bars below zero in a lighter shade to flag negative effects
         for bar, m in zip(bars, means):
             if m < 0:
