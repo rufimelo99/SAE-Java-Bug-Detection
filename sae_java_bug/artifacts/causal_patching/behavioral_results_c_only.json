@@ -1,16 +1,70 @@
 {
-  "baseline_security_vocab_score": -19.91,
-  "results": {
-    "L0": {"mean": 4.51, "sem": 0.37},
-    "L3": {"mean": 3.69, "sem": 0.33},
-    "L7": {"mean": 3.23, "sem": 0.32},
-    "L11": {"mean": 2.90, "sem": 0.31},
-    "L15": {"mean": 2.11, "sem": 0.25},
-    "L19": {"mean": 1.38, "sem": 0.22},
-    "L23": {"mean": 0.61, "sem": 0.12},
-    "L27": {"mean": 0.00, "sem": 0.00}
+  "baseline": {
+    "score_mean": -19.600627109527586,
+    "n": 1000
   },
-  "n_pairs": 100,
-  "language": "c",
-  "description": "Behavioral patching results: security vocabulary logit shift at final token position after patching body activations at layer L. C-only analysis to eliminate language-as-confound."
+  "vocab_size": 44,
+  "vocab_examples": [
+    "error",
+    "Error",
+    "error",
+    "NULL",
+    "check",
+    "valid",
+    "free",
+    "check",
+    "assert",
+    "assert",
+    "catch",
+    "throw",
+    "valid",
+    "sizeof",
+    "filter",
+    "NULL",
+    "Error",
+    "filter",
+    "encode",
+    "nullptr"
+  ],
+  "language": "C",
+  "0": {
+    "mean_delta": 3.9862585639953614,
+    "sem_delta": 0.11198319578365355,
+    "n": 1000
+  },
+  "3": {
+    "mean_delta": 3.2999858837127687,
+    "sem_delta": 0.10471367544786608,
+    "n": 1000
+  },
+  "7": {
+    "mean_delta": 2.8299797496795653,
+    "sem_delta": 0.09901017869235473,
+    "n": 1000
+  },
+  "11": {
+    "mean_delta": 2.549777220726013,
+    "sem_delta": 0.09591094976694563,
+    "n": 1000
+  },
+  "15": {
+    "mean_delta": 1.7760398120880128,
+    "sem_delta": 0.08033219317999188,
+    "n": 1000
+  },
+  "19": {
+    "mean_delta": 1.14827392578125,
+    "sem_delta": 0.0657343494275115,
+    "n": 1000
+  },
+  "23": {
+    "mean_delta": 0.4320108060836792,
+    "sem_delta": 0.03354702023454185,
+    "n": 1000
+  },
+  "27": {
+    "mean_delta": 0.0,
+    "sem_delta": 0.0,
+    "n": 1000
+  }
 }
