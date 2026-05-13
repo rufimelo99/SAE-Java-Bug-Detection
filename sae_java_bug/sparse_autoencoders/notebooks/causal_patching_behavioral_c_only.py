@@ -144,9 +144,11 @@ def load_pairs(
                 continue
             r = json.loads(line)
 
-            # Language filter
-            if lang and r.get("ext", "").lstrip(".").lower() != lang.lower():
-                continue
+            # Language filter (check file_extension field)
+            if lang:
+                file_ext = r.get("file_extension", "").lstrip(".").lower()
+                if file_ext != lang.lower():
+                    continue
 
             try:
                 sec = base64.b64decode(r["secure_code"]).decode(
@@ -165,7 +167,7 @@ def load_pairs(
                         "secure": sec,
                         "vuln": vuln,
                         "cwe": r.get("cwe", ""),
-                        "ext": r.get("ext", ""),
+                        "ext": r.get("file_extension", ""),
                     }
                 )
             if n_pairs and len(records) >= n_pairs:
