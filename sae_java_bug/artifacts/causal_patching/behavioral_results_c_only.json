@@ -1,0 +1,16 @@
+{
+  "baseline_security_vocab_score": -19.91,
+  "results": {
+    "L0": {"mean": 4.51, "sem": 0.37},
+    "L3": {"mean": 3.69, "sem": 0.33},
+    "L7": {"mean": 3.23, "sem": 0.32},
+    "L11": {"mean": 2.90, "sem": 0.31},
+    "L15": {"mean": 2.11, "sem": 0.25},
+    "L19": {"mean": 1.38, "sem": 0.22},
+    "L23": {"mean": 0.61, "sem": 0.12},
+    "L27": {"mean": 0.00, "sem": 0.00}
+  },
+  "n_pairs": 100,
+  "language": "c",
+  "description": "Behavioral patching results: security vocabulary logit shift at final token position after patching body activations at layer L. C-only analysis to eliminate language-as-confound."
+}
