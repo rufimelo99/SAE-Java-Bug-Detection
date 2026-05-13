@@ -539,6 +539,134 @@ def fig_direction_comprehensive(
     print(f"Saved: {out_path}")
 
 
+# ── Split figures for double-column paper layout ──────────────────────────────
+def fig_direction_distance_only(
+    norms_per_layer: list[np.ndarray],
+    c_mask: np.ndarray,
+    out_path: Path,
+):
+    """
+    Single-panel figure (Panel A):
+      Mean paired distance ||δ||₂ across layers
+    Optimized for single-column layout in papers.
+    """
+    n_layers = len(LAYERS)
+    ll = _layer_labels()
+    xs = list(range(n_layers))
+
+    fig, ax = plt.subplots(figsize=(4, 3.2))
+
+    # Panel A: Mean paired distance
+    means_c = [n[c_mask].mean() for n in norms_per_layer]
+    stds_c = [n[c_mask].std() for n in norms_per_layer]
+
+    ax.plot(xs, means_c, "o-", color="#4878cf", lw=1.5, ms=5)
+    ax.fill_between(
+        xs,
+        [m - s for m, s in zip(means_c, stds_c)],
+        [m + s for m, s in zip(means_c, stds_c)],
+        color="#4878cf",
+        alpha=0.15,
+    )
+    ax.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(ll, rotation=45)
+    ax.set_xlabel("Layer")
+    ax.set_ylabel(r"Mean $\|\delta_i^L\|_2$")
+    ax.set_title("Paired representation distance", fontsize=9, fontweight="bold")
+
+    fig.suptitle(
+        "Direction geometry: paired distance (C, n=" + str(c_mask.sum()) + ")",
+        fontsize=8,
+        y=1.00,
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+
+
+def fig_direction_alignment_combined(
+    align_per_layer: list[np.ndarray],
+    c_mask: np.ndarray,
+    meta: list,
+    out_path: Path,
+):
+    """
+    Single-panel figure combining global and per-family alignment:
+      All bug-type families plus global alignment on one plot
+    Same axes (layer vs alignment %) for direct comparison.
+    """
+    n_layers = len(LAYERS)
+    ll = _layer_labels()
+    xs = list(range(n_layers))
+
+    fig, ax = plt.subplots(figsize=(5.5, 3.5))
+
+    # Global alignment (bold line)
+    frac_c = [np.mean(a[c_mask] > 0) for a in align_per_layer]
+    ax.plot(xs, frac_c, "o-", color="black", lw=2.5, ms=6, label="Global", zorder=10)
+
+    # Per-family alignment
+    family_masks = {}
+    for family_name, cwe_list in CWE_FAMILIES.items():
+        family_mask = np.array(
+            [c_mask[i] and meta[i].get("cwe") in cwe_list for i in range(len(meta))]
+        )
+        if family_mask.sum() > 0:
+            family_masks[family_name] = family_mask
+
+    colors = {
+        "Memory Safety": "#4878cf",
+        "Injection": "#e07b39",
+        "Resource Management": "#6cc644",
+        "Information Disclosure": "#c71585",
+    }
+
+    for family_name, family_mask in sorted(family_masks.items()):
+        frac = [np.mean(a[family_mask] > 0) for a in align_per_layer]
+        ax.plot(
+            xs,
+            frac,
+            "o-",
+            color=colors.get(family_name, "#999999"),
+            lw=1.5,
+            ms=5,
+            label=family_name,
+            alpha=0.75,
+        )
+
+    ax.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)")
+    ax.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)
+    ax.axvspan(1, n_layers - 2, color="lightgrey", alpha=0.03)
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(ll, rotation=45)
+    ax.set_xlabel("Layer", fontsize=10)
+    ax.set_ylabel(r"Fraction pairs: $\delta_i^L \cdot \mathbf{d}^L > 0$", fontsize=10)
+    ax.set_title(
+        "Vulnerability direction alignment: global and per-family",
+        fontsize=10,
+        fontweight="bold",
+    )
+    ax.set_ylim(0.45, 0.95)
+    ax.legend(fontsize=8, loc="lower left", framealpha=0.95, ncol=2)
+    ax.grid(True, alpha=0.2, axis="y")
+
+    fig.suptitle(
+        "Direction geometry: alignment across bug types (C, n="
+        + str(c_mask.sum())
+        + ")",
+        fontsize=8,
+        y=1.00,
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+    print(f"Saved: {out_path}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -614,6 +742,20 @@ def main():
         print(f"  L{layer}: {c:.4f}")
 
     # ── Figures
+    # Generate split figures for double-column paper layout
+    fig_direction_distance_only(
+        norms_per_layer,
+        c_mask,
+        PAPER_FIGS / "fig_direction_paired_distance.pdf",
+    )
+    fig_direction_alignment_combined(
+        align_per_layer,
+        c_mask,
+        meta,
+        PAPER_FIGS / "fig_direction_alignment.pdf",
+    )
+
+    # Also keep the comprehensive 3-panel version for reference
     fig_direction_comprehensive(
         norms_per_layer,
         align_per_layer,
