@@ -392,10 +392,12 @@ def plot_results(results):
             if not alphas_dict:
                 continue
 
-            alphas = sorted([float(a) for a in alphas_dict.keys()])
-            prefs = [alphas_dict[str(float(a))] for a in alphas]
-
-            ax.plot(alphas, prefs, marker="o", label=test_case_name, linewidth=2)
+            # Just use the keys as they exist in the dict
+            alphas_prefs = sorted([(float(k), v) for k, v in alphas_dict.items()])
+            if alphas_prefs:
+                alphas = [a for a, p in alphas_prefs]
+                prefs = [p for a, p in alphas_prefs]
+                ax.plot(alphas, prefs, marker="o", label=test_case_name, linewidth=2)
 
         ax.axhline(0, color="black", linestyle="-", linewidth=0.8)
         ax.axvline(0, color="red", linestyle="--", linewidth=1, alpha=0.5)
