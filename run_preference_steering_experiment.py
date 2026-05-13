@@ -302,7 +302,6 @@ def run_experiment(device, quick=False):
 
             for alpha in alphas:
                 sec_prefs = []
-                vuln_prefs = []
 
                 # Register hook for this alpha/layer
                 hook_handle = None
@@ -332,8 +331,15 @@ def run_experiment(device, quick=False):
                         )
                         sec_prefs.append(sec_lp - vuln_lp)
 
-                    mean_pref = np.mean(sec_prefs)
-                    test_results["alphas"][float(alpha)] = float(mean_pref)
+                    if sec_prefs:
+                        mean_pref = np.mean(sec_prefs)
+                        test_results["alphas"][float(alpha)] = float(mean_pref)
+                        print(f"    α={alpha:+6.1f}: preference={mean_pref:+.4f}")
+                    else:
+                        print(f"    α={alpha:+6.1f}: ERROR - no measurements")
+
+                except Exception as e:
+                    print(f"    α={alpha:+6.1f}: ERROR - {e}")
 
                 finally:
                     if hook_handle is not None:
@@ -383,16 +389,11 @@ def plot_results(results):
                 continue
 
             alphas_dict = layer_data[test_case_name]["alphas"]
-            alphas = sorted([float(a) for a in alphas_dict.keys()])
+            if not alphas_dict:
+                continue
 
-            # Get preferences, handling both int and float string keys
-            prefs = []
-            for a in alphas:
-                # Try both formats: "-20.0" and "-20"
-                key = str(a) if "." in str(a) else str(int(a))
-                if key not in alphas_dict:
-                    key = str(float(a))
-                prefs.append(alphas_dict[key])
+            alphas = sorted([float(a) for a in alphas_dict.keys()])
+            prefs = [alphas_dict[str(float(a))] for a in alphas]
 
             ax.plot(alphas, prefs, marker="o", label=test_case_name, linewidth=2)
 
