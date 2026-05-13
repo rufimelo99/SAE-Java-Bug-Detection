@@ -382,15 +382,17 @@ def plot_results(results):
 
         ax.set_xlabel("Steering Strength (α)", fontsize=11)
         ax.set_ylabel(
-            "Preference: log-prob(secure) - log-prob(vulnerable)", fontsize=11
+            "Preference: log-prob(secure) - log-prob(vulnerable) [log scale]",
+            fontsize=11,
         )
+        ax.set_yscale("symlog", linthresh=0.001)
         ax.set_title(
             f"Layer {layer} ({results['n_samples']} Real Code Pairs)",
             fontsize=12,
             fontweight="bold",
         )
         ax.legend(fontsize=9, loc="best")
-        ax.grid(True, alpha=0.3)
+        ax.grid(True, alpha=0.3, which="both")
 
     plt.suptitle(
         "Real Code: Secure vs Vulnerable Preference Under Steering",
