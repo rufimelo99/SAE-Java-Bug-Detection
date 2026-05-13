@@ -382,10 +382,17 @@ def plot_results(results):
             if test_case_name not in layer_data:
                 continue
 
-            alphas = sorted(
-                [float(a) for a in layer_data[test_case_name]["alphas"].keys()]
-            )
-            prefs = [layer_data[test_case_name]["alphas"][str(a)] for a in alphas]
+            alphas_dict = layer_data[test_case_name]["alphas"]
+            alphas = sorted([float(a) for a in alphas_dict.keys()])
+
+            # Get preferences, handling both int and float string keys
+            prefs = []
+            for a in alphas:
+                # Try both formats: "-20.0" and "-20"
+                key = str(a) if "." in str(a) else str(int(a))
+                if key not in alphas_dict:
+                    key = str(float(a))
+                prefs.append(alphas_dict[key])
 
             ax.plot(alphas, prefs, marker="o", label=test_case_name, linewidth=2)
 
