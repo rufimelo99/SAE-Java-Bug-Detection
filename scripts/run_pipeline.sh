@@ -18,10 +18,14 @@
 #
 # Usage:
 #   ./run_pipeline.sh [--models=qwen,codellama,starcoder2] [--skip-existing]
-#                     [--skip-activations] [--figures-only] [--with-datasets]
+#                     [--skip-activations] [--figures-only] [--datasets=...]
+#                     [--layers=3,7,11,15,19,23,27]
 #
 # Options:
-#   --with-datasets: Also run comparative analysis on SVEN and PreciseBugs datasets
+#   --datasets=...  : Comma-separated datasets (deltasecommits,sven,precisebugs)
+#                     Default: deltasecommits
+#   --layers=...    : Comma-separated layer indices to extract
+#                     Default: 3,7,11,15,19,23,27
 #
 
 set -e
@@ -33,13 +37,14 @@ RESULTS_DIR="${PROJECT_DIR}/results"
 ACTIVATIONS_DIR="${PROJECT_DIR}/sae_java_bug/artifacts/multi_model_probing"
 FIGURES_DIR="${PROJECT_DIR}/../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures"
 
-MODELS="qwen,codellama,starcoder2"
+MODELS="qwen-7b,codellama-7b,starcoder2-7b"
+DATASETS="deltasecommits"
+LAYERS="3,7,11,15,19,23,27"
 LANGUAGE="all"
 SKIP_EXISTING=""
 SKIP_ACTIVATIONS=""
 FORCE_ACTIVATIONS=""
 FIGURES_ONLY=""
-WITH_DATASETS=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -69,12 +74,15 @@ for arg in "$@"; do
         --figures-only)
             FIGURES_ONLY="yes"
             ;;
-        --with-datasets)
-            WITH_DATASETS="yes"
+        --datasets=*)
+            DATASETS="${arg#*=}"
+            ;;
+        --layers=*)
+            LAYERS="${arg#*=}"
             ;;
         *)
             echo "Unknown option: $arg"
-            echo "Usage: $0 [--models=...] [--language=c] [--skip-existing] [--skip-activations] [--force-activations] [--figures-only] [--with-datasets]"
+            echo "Usage: $0 [--models=...] [--datasets=...] [--layers=...] [--language=c] [--skip-existing] [--skip-activations] [--figures-only]"
             exit 1
             ;;
     esac
@@ -97,45 +105,24 @@ mkdir -p "$RESULTS_DIR"
 mkdir -p "$ACTIVATIONS_DIR"
 mkdir -p "$FIGURES_DIR"
 
-# Map short model names (qwen, codellama, starcoder2) to the full names
-# used by multi_model_probing.py (qwen-7b, codellama-7b, starcoder2-7b)
-model_full_name() {
-    case "$1" in
-        qwen)            echo "qwen-7b" ;;
-        qwen-coder)      echo "qwen-coder-7b" ;;
-        codellama)       echo "codellama-7b" ;;
-        codellama-13b)   echo "codellama-13b" ;;
-        starcoder2)      echo "starcoder2-7b" ;;
-        starcoder2-15b)  echo "starcoder2-15b" ;;
-        deepseekcoder)   echo "deepseekcoder-7b" ;;
-        llama3)          echo "llama3-8b" ;;
-        *)               echo "$1" ;;
-    esac
-}
 
-# Step 0: Compute activations
+# Step 0: Compute activations for all datasets
 if [ -z "$FIGURES_ONLY" ] && [ -z "$SKIP_ACTIVATIONS" ]; then
-    echo -e "${YELLOW}Step 0: Computing activations...${NC}"
+    echo -e "${YELLOW}Step 0: Computing activations for all datasets...${NC}"
     echo ""
 
     cd "$PROJECT_DIR"
 
-    IFS=',' read -ra MODEL_LIST <<< "$MODELS"
-    for model_short in "${MODEL_LIST[@]}"; do
-        model_full="$(model_full_name "$model_short")"
-        npz_path="${ACTIVATIONS_DIR}/activations_${model_full}.npz"
+    echo -e "  ${YELLOW}Extracting activations:${NC}"
+    echo -e "    Datasets: $DATASETS"
+    echo -e "    Models: $MODELS"
+    echo -e "    Layers: $LAYERS"
+    echo ""
 
-        if [ -f "$npz_path" ] && [ -z "$FORCE_ACTIVATIONS" ]; then
-            echo -e "  ${GREEN}✓ $model_full — cached ($npz_path)${NC}"
-            continue
-        fi
-
-        echo -e "  Extracting activations for ${model_full}..."
-        python -m sae_java_bug.evaluation.multi_model_probing \
-            --model "$model_full" \
-            --output-dir "$ACTIVATIONS_DIR"
-        echo -e "  ${GREEN}✓ $model_full activations saved${NC}"
-    done
+    python -m sae_java_bug.evaluation.multi_dataset_activations \
+        --datasets "$DATASETS" \
+        --models "$MODELS" \
+        --layers "$LAYERS"
 
     echo ""
     echo -e "${GREEN}✓ Activations ready${NC}"
@@ -269,28 +256,6 @@ else
     echo ""
 fi
 
-# Step 6: Multi-dataset comparative analysis (optional)
-if [ -n "$WITH_DATASETS" ]; then
-    echo ""
-    echo -e "${YELLOW}Step 6: Running multi-dataset comparative analysis...${NC}"
-    echo ""
-
-    cd "$SCRIPT_DIR"
-
-    # Check if multi-dataset comparison script exists
-    if [ -f "$PROJECT_DIR/sae_java_bug/sparse_autoencoders/notebooks/multi_dataset_comparison.py" ]; then
-        python "$PROJECT_DIR/sae_java_bug/sparse_autoencoders/notebooks/multi_dataset_comparison.py"
-        echo ""
-        echo -e "${GREEN}✓ Multi-dataset comparative analysis completed${NC}"
-        echo ""
-    else
-        echo -e "${YELLOW}⚠ Multi-dataset comparison script not found${NC}"
-        echo ""
-    fi
-else
-    echo -e "${YELLOW}Skipping multi-dataset analysis (use --with-datasets flag to enable)${NC}"
-    echo ""
-fi
 
 # Summary
 echo ""
@@ -303,24 +268,27 @@ echo "  Activations: $ACTIVATIONS_DIR/"
 echo "  Raw data:    $RESULTS_DIR/raw_data/"
 echo "  Figures:     $FIGURES_DIR"
 echo ""
-echo "Generated figures:"
-echo "  ✓ Base multi-model figures (5): per-pair alignment, paired distances, CWE transfer, direction heatmaps, ranking accuracy"
-echo "  ✓ Per-model styled figures (6): CWE pairwise heatmaps + direction alignment curves"
-echo "  ✓ Multi-model comparison plots (3): alignment, magnitude, stability across architectures"
-echo "  ✓ Critical paper figures (3): Pairwise CWE-type probe AUROC heatmaps (per model)"
-echo "  ✓ Steering causal validation (3): Direction steering effect on model preference (when experiments available)"
-if [ -n "$WITH_DATASETS" ]; then
-    echo "  ✓ Multi-dataset comparative analysis: SVEN and PreciseBugs cross-dataset validation"
-fi
+echo "Configuration used:"
+echo "  Datasets: $DATASETS"
+echo "  Models: $MODELS"
+echo "  Layers: $LAYERS"
 echo ""
-echo "Total: 20+ publication-quality figures (+ comparative analysis)"
+echo "Generated figures (per dataset):"
+echo "  ✓ Base multi-model figures (5): per-pair alignment, paired distances, CWE transfer"
+echo "  ✓ Per-model styled figures (6): CWE pairwise heatmaps + alignment curves"
+echo "  ✓ Multi-model comparison plots (3): alignment, magnitude, stability"
+echo "  ✓ Critical paper figures (3): Pairwise CWE-type probe AUROC heatmaps"
+echo "  ✓ Steering causal validation (3): Direction steering effect on preference"
+echo ""
+echo "Total: 20+ publication-quality figures per dataset"
 echo ""
 echo "Pipeline Features:"
-echo "  • Automatically skips steps if raw data already exists"
-echo "  • Caches activations to avoid recomputation"
-echo "  • All figures regenerated with consistent, publication-quality styling"
-echo "  • Optional multi-dataset comparative analysis (--with-datasets)"
+echo "  • Multi-dataset support: DeltaSecommits, SVEN, PreciseBugs"
+echo "  • Flexible model selection (Qwen, CodeLlama, StarCoder2, etc.)"
+echo "  • Configurable layer extraction"
+echo "  • Automatic caching of activations"
+echo "  • Smart step-level skipping for existing results"
 echo ""
-echo "To run with multi-dataset analysis:"
-echo "  ./run_pipeline.sh --with-datasets"
+echo "Example: Run with SVEN and PreciseBugs"
+echo "  ./run_pipeline.sh --datasets=sven,precisebugs --models=qwen-7b --figures-only"
 echo ""
