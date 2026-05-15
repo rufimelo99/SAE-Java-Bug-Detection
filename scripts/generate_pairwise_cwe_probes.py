@@ -27,20 +27,34 @@ logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(mes
 logger = logging.getLogger(__name__)
 
 # Style matching paper
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.size": 10,
-    "figure.dpi": 150,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-})
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.size": 10,
+        "figure.dpi": 150,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+    }
+)
 
 _SCRIPTS_DIR = Path(__file__).parent
 _PROJECT_DIR = _SCRIPTS_DIR.parent
 
 ACTIVATIONS_DIR = _PROJECT_DIR / "sae_java_bug" / "artifacts" / "multi_model_probing"
-METADATA_FILE = _PROJECT_DIR / "sae_java_bug" / "artifacts" / "activations" / "advanced_pool" / "20260308_214306" / "meta.json"
-OUTPUT_DIR = _PROJECT_DIR.parent / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations" / "figures"
+METADATA_FILE = (
+    _PROJECT_DIR
+    / "sae_java_bug"
+    / "artifacts"
+    / "activations"
+    / "advanced_pool"
+    / "20260308_214306"
+    / "meta.json"
+)
+OUTPUT_DIR = (
+    _PROJECT_DIR.parent
+    / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations"
+    / "figures"
+)
 RESULTS_DIR = _PROJECT_DIR / "results" / "raw_data"
 
 # Top CWE types to include
@@ -49,9 +63,9 @@ CWE_TYPES = [
     "CWE-120",  # Buffer Copy without Bounds Check
     "CWE-125",  # Out-of-bounds Read
     "CWE-787",  # Out-of-bounds Write
-    "CWE-78",   # OS Command Injection
-    "CWE-89",   # SQL Injection
-    "CWE-22",   # Path Traversal
+    "CWE-78",  # OS Command Injection
+    "CWE-89",  # SQL Injection
+    "CWE-22",  # Path Traversal
     "CWE-401",  # Missing Release of Resource
 ]
 
@@ -94,7 +108,9 @@ def get_peak_layer(activations: Dict[str, np.ndarray]) -> int:
     return layers[idx]
 
 
-def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int = 5) -> float:
+def probe_pairwise(
+    X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int = 5
+) -> float:
     """
     Binary classification probe: y=1 for CWE1, y=0 for CWE2.
     Returns AUROC.
@@ -108,7 +124,9 @@ def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int
 
     n_comp = min(n_components, X.shape[1], X.shape[0] - 1)
 
-    clf = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=42)
+    clf = LogisticRegression(
+        C=0.1, max_iter=1000, class_weight="balanced", random_state=42
+    )
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
     y_score = np.zeros(len(y), dtype=float)
@@ -130,16 +148,22 @@ def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int
     return auroc
 
 
-def save_results(model_full: str, available_cwes: List[str],
-                 layer_matrices: Dict[int, np.ndarray], peak_layer: int):
+def save_results(
+    model_full: str,
+    available_cwes: List[str],
+    layer_matrices: Dict[int, np.ndarray],
+    peak_layer: int,
+):
     """Save per-layer AUROC matrices to JSON for later figure regeneration."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": model_full,
         "peak_layer": peak_layer,
         "cwe_types": available_cwes,
-        "layers": {str(layer): {"auroc_matrix": mat.tolist()}
-                   for layer, mat in sorted(layer_matrices.items())},
+        "layers": {
+            str(layer): {"auroc_matrix": mat.tolist()}
+            for layer, mat in sorted(layer_matrices.items())
+        },
     }
     out = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
     with open(out, "w") as f:
@@ -156,54 +180,84 @@ def load_results(model_full: str) -> Dict:
         return json.load(f)
 
 
-def plot_heatmap(model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int):
+def plot_heatmap(
+    model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int
+):
     """Render and save the heatmap PDF from a matrix."""
-    fig, ax = plt.subplots(figsize=(9, 8))
-    im = ax.imshow(matrix, cmap="RdYlGn", vmin=50, vmax=100, aspect="auto")
+    import seaborn as sns
+
+    # Convert percentage (0-100) to decimal (0.0-1.0) if needed
+    if matrix.max() > 1.5:
+        matrix_norm = matrix / 100.0
+    else:
+        matrix_norm = matrix
+
+    fig, ax = plt.subplots(figsize=(8.5, 7.5))
 
     cwe_short = [c.split("-")[1] for c in available_cwes]
-    ax.set_xticks(range(len(available_cwes)))
-    ax.set_yticks(range(len(available_cwes)))
-    ax.set_xticklabels(cwe_short, fontsize=10, rotation=45, ha="right")
-    ax.set_yticklabels(cwe_short, fontsize=10)
-    ax.set_xlabel("CWE Type (target)", fontsize=11, fontweight="bold")
-    ax.set_ylabel("CWE Type (source)", fontsize=11, fontweight="bold")
 
+    # Use seaborn heatmap with proper styling
+    sns.heatmap(
+        matrix_norm,
+        annot=True,
+        fmt=".2f",
+        cmap="RdYlGn",
+        vmin=0.4,
+        vmax=1.0,
+        ax=ax,
+        xticklabels=cwe_short,
+        yticklabels=cwe_short,
+        linewidths=0.4,
+        square=True,
+        cbar=False,
+        cbar_kws={"label": "AUROC"},
+    )
+
+    # Add grey diagonal for self-pairs
     for i in range(len(available_cwes)):
-        for j in range(len(available_cwes)):
-            ax.text(j, i, f"{matrix[i, j]:.0f}%",
-                    ha="center", va="center", color="black", fontsize=9)
+        ax.add_patch(plt.Rectangle((i, i), 1, 1, fill=True, color="#cccccc", lw=0))
 
-    plt.colorbar(im, ax=ax, label="AUROC (%)")
-    ax.set_title(f"Pairwise CWE-type Probe AUROC: {model_full}\n(Layer {peak_layer}, mean-token pooling)",
-                 fontsize=12, fontweight="bold", pad=15)
+    ax.set_xlabel("CWE Type (target)", fontsize=10, fontweight="normal")
+    ax.set_ylabel("CWE Type (source)", fontsize=10, fontweight="normal")
+    ax.set_title(
+        f"Pairwise CWE probe across layers — peak AUROC\n(vulnerable-side mean-token; green = separable, yellow = chance)",
+        fontsize=10,
+        fontweight="normal",
+        pad=12,
+    )
+
+    # Rotate x labels
+    ax.set_xticklabels(cwe_short, rotation=45, ha="right", fontsize=9)
+    ax.set_yticklabels(cwe_short, fontsize=9)
 
     plt.tight_layout()
 
-    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model_full}.pdf"
+    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model_full.split('-')[0]}.pdf"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
     logger.info(f"✓ Figure saved: {output_file}")
     plt.close()
 
 
-def _probe_matrix(X_all: np.ndarray, cwes: np.ndarray, available_cwes: List[str]) -> np.ndarray:
+def _probe_matrix(
+    X_all: np.ndarray, cwes: np.ndarray, available_cwes: List[str]
+) -> np.ndarray:
     """Compute the n_cwes × n_cwes AUROC matrix for one layer's activations."""
     n_cwes = len(available_cwes)
     matrix = np.zeros((n_cwes, n_cwes))
     for i, cwe1 in enumerate(available_cwes):
         for j, cwe2 in enumerate(available_cwes):
             if i == j:
-                matrix[i, j] = 100
+                matrix[i, j] = 1.0
                 continue
             mask1 = cwes == cwe1
             mask2 = cwes == cwe2
             if mask1.sum() == 0 or mask2.sum() == 0:
-                matrix[i, j] = 50
+                matrix[i, j] = 0.5
                 continue
             y = np.concatenate([np.ones(mask1.sum()), np.zeros(mask2.sum())])
             X_subset = np.vstack([X_all[mask1], X_all[mask2]])
-            matrix[i, j] = probe_pairwise(X_subset, y) * 100
+            matrix[i, j] = probe_pairwise(X_subset, y)
     return matrix
 
 
@@ -237,11 +291,15 @@ def run_probing(model_full: str, cwes: np.ndarray):
 
     available_cwes = sorted([c for c in np.unique(cwes) if c in CWE_TYPES])
     if len(available_cwes) < 2:
-        logger.warning(f"Not enough CWE types for {model_full} (found: {available_cwes})")
+        logger.warning(
+            f"Not enough CWE types for {model_full} (found: {available_cwes})"
+        )
         return
 
     peak_layer = get_peak_layer(activations)
-    logger.info(f"Available CWEs: {available_cwes}, layers: {all_layers}, peak: {peak_layer}")
+    logger.info(
+        f"Available CWEs: {available_cwes}, layers: {all_layers}, peak: {peak_layer}"
+    )
 
     layer_matrices: Dict[int, np.ndarray] = {}
     for layer in all_layers:
@@ -257,27 +315,51 @@ def figures_from_saved(model_full: str, layer: int = None):
     """Regenerate figure from saved JSON without re-running probing."""
     results = load_results(model_full)
     if not results:
-        logger.warning(f"No saved data for {model_full} — run without --figures-only first")
+        logger.warning(
+            f"No saved data for {model_full} — run without --figures-only first"
+        )
         return
-    plot_layer = layer if layer is not None else results["peak_layer"]
-    layer_data = results["layers"].get(str(plot_layer))
-    if layer_data is None:
-        available = sorted(results["layers"].keys(), key=int)
-        logger.warning(f"Layer {plot_layer} not found for {model_full}. Available: {available}")
-        return
-    matrix = np.array(layer_data["auroc_matrix"])
-    plot_heatmap(model_full, results["cwe_types"], matrix, plot_layer)
+    # Handle both old format (layers dict) and new format (single auroc_matrix)
+    if "auroc_matrix" in results:
+        # New format: single AUROC matrix at peak layer
+        matrix = np.array(results["auroc_matrix"])
+        plot_heatmap(model_full, results["cwe_types"], matrix, results["peak_layer"])
+    elif "layers" in results:
+        # Old format: layer-by-layer data
+        plot_layer = layer if layer is not None else results["peak_layer"]
+        layer_data = results["layers"].get(str(plot_layer))
+        if layer_data is None:
+            available = sorted(results["layers"].keys(), key=int)
+            logger.warning(
+                f"Layer {plot_layer} not found for {model_full}. Available: {available}"
+            )
+            return
+        matrix = np.array(layer_data["auroc_matrix"])
+        plot_heatmap(model_full, results["cwe_types"], matrix, plot_layer)
+    else:
+        logger.error(f"No auroc_matrix or layers found in {model_full} results")
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--figures-only", action="store_true",
-                        help="Regenerate figures from saved JSON without re-running probing")
-    parser.add_argument("--skip-existing", action="store_true",
-                        help="Skip models that already have a saved JSON result")
-    parser.add_argument("--layer", type=int, default=None,
-                        help="Layer to plot (default: peak layer stored in JSON)")
+    parser.add_argument(
+        "--figures-only",
+        action="store_true",
+        help="Regenerate figures from saved JSON without re-running probing",
+    )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip models that already have a saved JSON result",
+    )
+    parser.add_argument(
+        "--layer",
+        type=int,
+        default=None,
+        help="Layer to plot (default: peak layer stored in JSON)",
+    )
     args = parser.parse_args()
 
     if args.figures_only:
@@ -312,7 +394,9 @@ def main():
         if args.skip_existing:
             json_path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
             if json_path.exists():
-                logger.info(f"  Skipping {model_full} (already computed, regenerating figure)")
+                logger.info(
+                    f"  Skipping {model_full} (already computed, regenerating figure)"
+                )
                 figures_from_saved(model_full, layer=args.layer)
                 continue
         try:

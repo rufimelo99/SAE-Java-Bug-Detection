@@ -5,10 +5,13 @@
 #
 # This script runs the complete pipeline:
 # 0. Computes and caches model activations (skipped if NPZ already exists)
-# 1. Runs experiments for all three models (Qwen, CodeLlama, StarCoder2)
-# 2. Stores raw JSON results
-# 3. Generates publication-quality figures (base figures + multi-model styled)
-# 4. Generates per-model heatmaps and comparison plots
+# 1. Runs mechanistic experiments for all three models (Qwen, CodeLlama, StarCoder2)
+#    - Direction geometry, CWE universality, paired ranking probes
+# 2. Generates base multi-model comparison figures (5 figures)
+# 3. Generates per-model styled figures (6 figures: CWE heatmaps + alignment curves)
+# 4. Generates critical paper figures:
+#    - Pairwise CWE-type probe AUROC heatmaps (3 figures, one per model)
+#    - Direction steering causal validation plots (3 figures, when steering experiments available)
 #
 # Usage:
 #   ./run_pipeline.sh [--models=qwen,codellama,starcoder2] [--skip-existing]
@@ -205,13 +208,16 @@ echo "  Raw data:    $RESULTS_DIR/raw_data/"
 echo "  Figures:     $FIGURES_DIR"
 echo ""
 echo "Generated figures:"
-echo "  ✓ Multi-model base figures (per-pair alignment, paired distances, etc.)"
-echo "  ✓ Per-model CWE pairwise heatmaps (fig_cwe_pairwise_*.pdf)"
-echo "  ✓ Per-model direction alignment (fig_direction_alignment_*.pdf)"
+echo "  ✓ Base multi-model figures (per-pair alignment, paired distances, CWE transfer)"
+echo "  ✓ Per-model CWE pairwise heatmaps (fig_cwe_pairwise_*.pdf) — CWE universality"
+echo "  ✓ Per-model direction alignment curves (fig_direction_alignment_*.pdf)"
 echo "  ✓ Multi-model comparison plots (alignment, magnitude, stability)"
-echo "  ✓ Pairwise CWE-type probe AUROC heatmap (fig_cwe_pairwise_probe.pdf)"
-echo "  ✓ Direction steering: causal validation plots (fig_causal_summary_*.pdf)"
+echo "  ✓ Pairwise CWE-type probe AUROC heatmaps (fig_cwe_pairwise_probe_*.pdf) — per model"
+echo "  ✓ Direction steering: causal validation plots (fig_causal_summary_*.pdf) ⏳ requires steering experiments"
 echo ""
-echo "Note: Steering experiments for CodeLlama/StarCoder2 require:"
-echo "  python scripts/run_corrected_steering_experiment.py --models codellama,starcoder2"
+echo "To generate steering causal validation plots, run in VM with PyTorch:"
+echo "  cd /Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection"
+echo "  python scripts/run_multimodel_steering_experiments.py --models qwen,codellama,starcoder2"
+echo "  Then regenerate figures:"
+echo "  bash scripts/generate_missing_figures.sh --steering-only"
 echo ""

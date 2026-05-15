@@ -50,9 +50,10 @@ if [ -z "$STEERING_ONLY" ]; then
     echo "Step 1: Generating pairwise CWE-type probe AUROC heatmaps..."
     echo ""
 
-    python3 "$SCRIPT_DIR/generate_pairwise_cwe_probes.py"
+    cd "$PROJECT_DIR"
+    python3 "$SCRIPT_DIR/generate_pairwise_cwe_probes.py" --figures-only
 
-    echo "✓ Pairwise CWE-type heatmaps generated"
+    echo "✓ Pairwise CWE-type probe heatmaps generated"
     echo ""
 fi
 
