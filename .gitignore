@@ -205,3 +205,4 @@ sae_java_bug/artifacts/multi_model_probing/activations_codellama-7b.npz
 /sae_java_bug/artifacts/activations/precisebugs_c_only
 /sae_java_bug/artifacts/activations/bigvul_c_only
 /sae_java_bug/artifacts/activations/sven_c_only
+/results/raw_data

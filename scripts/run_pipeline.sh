@@ -7,7 +7,8 @@
 # 0. Computes and caches model activations (skipped if NPZ already exists)
 # 1. Runs experiments for all three models (Qwen, CodeLlama, StarCoder2)
 # 2. Stores raw JSON results
-# 3. Generates publication-quality figures
+# 3. Generates publication-quality figures (base figures + multi-model styled)
+# 4. Generates per-model heatmaps and comparison plots
 #
 # Usage:
 #   ./run_pipeline.sh [--models=qwen,codellama,starcoder2] [--skip-existing]
@@ -169,6 +170,19 @@ python generate_all_figures.py \
 echo ""
 echo -e "${GREEN}✓ Figures generated${NC}"
 
+# Step 3: Generate multi-model styled figures
+echo ""
+echo -e "${YELLOW}Step 3: Generating multi-model styled figures...${NC}"
+echo ""
+
+cd "$SCRIPT_DIR"
+
+python generate_multimodel_styled_figures.py
+python generate_steering_style_plots.py
+
+echo ""
+echo -e "${GREEN}✓ Multi-model styled figures generated${NC}"
+
 # Summary
 echo ""
 echo -e "${BLUE}===============================================${NC}"
@@ -179,4 +193,10 @@ echo "Results saved to:"
 echo "  Activations: $ACTIVATIONS_DIR/"
 echo "  Raw data:    $RESULTS_DIR/raw_data/"
 echo "  Figures:     $FIGURES_DIR"
+echo ""
+echo "Generated figures:"
+echo "  ✓ Multi-model base figures (per-pair alignment, paired distances, etc.)"
+echo "  ✓ Per-model CWE pairwise heatmaps (fig_cwe_pairwise_*.pdf)"
+echo "  ✓ Per-model direction alignment (fig_direction_alignment_*.pdf)"
+echo "  ✓ Multi-model comparison plots (alignment, magnitude, stability)"
 echo ""
