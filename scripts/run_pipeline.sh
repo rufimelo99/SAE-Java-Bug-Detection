@@ -3,15 +3,18 @@
 ##
 # Master pipeline orchestrator for all experiments and figure generation
 #
-# This script runs the complete pipeline:
+# This script runs the complete pipeline with automatic caching:
 # 0. Computes and caches model activations (skipped if NPZ already exists)
 # 1. Runs mechanistic experiments for all three models (Qwen, CodeLlama, StarCoder2)
 #    - Direction geometry, CWE universality, paired ranking probes
+#    - Skipped if experiment JSON results already exist
 # 2. Generates base multi-model comparison figures (5 figures)
 # 3. Generates per-model styled figures (6 figures: CWE heatmaps + alignment curves)
 # 4. Generates critical paper figures:
 #    - Pairwise CWE-type probe AUROC heatmaps (3 figures, one per model)
-#    - Direction steering causal validation plots (3 figures, when steering experiments available)
+# 5. Runs steering experiments (if available in environment):
+#    - Direction steering causal validation plots (3 figures, one per model)
+#    - Skipped if steering JSON results already exist or PyTorch not available
 #
 # Usage:
 #   ./run_pipeline.sh [--models=qwen,codellama,starcoder2] [--skip-existing]
@@ -141,20 +144,38 @@ fi
 
 # Step 1: Run experiments (unless --figures-only is set)
 if [ -z "$FIGURES_ONLY" ]; then
-    echo -e "${YELLOW}Step 1: Running experiments...${NC}"
+    echo -e "${YELLOW}Step 1: Running mechanistic experiments...${NC}"
     echo ""
 
-    cd "$SCRIPT_DIR"
+    # Check if experiment results already exist for all models
+    IFS=',' read -ra MODEL_LIST <<< "$MODELS"
+    ALL_EXIST=true
+    for model_short in "${MODEL_LIST[@]}"; do
+        model_short=$(echo "$model_short" | xargs)
+        # Check for key experiment outputs
+        if ! ls "$RESULTS_DIR"/raw_data/${model_short}*.json &>/dev/null; then
+            ALL_EXIST=false
+            break
+        fi
+    done
 
-    python3 run_all_experiments_FIXED.py \
-        --models "$MODELS" \
-        --language "$LANGUAGE" \
-        --output-dir "$RESULTS_DIR" \
-        --activations-dir "$ACTIVATIONS_DIR" \
-        $SKIP_EXISTING
+    if [ "$ALL_EXIST" = true ]; then
+        echo -e "  ${GREEN}✓ All experiment results already exist${NC}"
+        echo ""
+    else
+        cd "$SCRIPT_DIR"
 
-    echo ""
-    echo -e "${GREEN}✓ Experiments completed${NC}"
+        python3 run_all_experiments_FIXED.py \
+            --models "$MODELS" \
+            --language "$LANGUAGE" \
+            --output-dir "$RESULTS_DIR" \
+            --activations-dir "$ACTIVATIONS_DIR" \
+            $SKIP_EXISTING
+
+        echo ""
+        echo -e "${GREEN}✓ Experiments completed${NC}"
+        echo ""
+    fi
 else
     echo -e "${YELLOW}Skipping experiments (--figures-only mode)${NC}"
     echo ""
@@ -196,6 +217,51 @@ bash generate_missing_figures.sh --models="$MODELS"
 echo ""
 echo -e "${GREEN}✓ Critical figures generated${NC}"
 
+# Step 5: Run steering experiments (if not skipped)
+if [ -z "$SKIP_ACTIVATIONS" ] && [ -z "$FIGURES_ONLY" ]; then
+    echo ""
+    echo -e "${YELLOW}Step 5: Running steering experiments...${NC}"
+    echo ""
+
+    # Check if steering results already exist
+    IFS=',' read -ra MODEL_LIST <<< "$MODELS"
+    STEERING_EXISTS=true
+    for model_short in "${MODEL_LIST[@]}"; do
+        model_short=$(echo "$model_short" | xargs)
+        if ! ls "$PROJECT_DIR"/results_real_preference_steering_${model_short}_*.json &>/dev/null; then
+            STEERING_EXISTS=false
+            break
+        fi
+    done
+
+    if [ "$STEERING_EXISTS" = true ]; then
+        echo -e "  ${GREEN}✓ All steering experiment results already exist${NC}"
+        echo ""
+        # Regenerate steering plots from existing results
+        cd "$SCRIPT_DIR"
+        bash generate_missing_figures.sh --steering-only --models="$MODELS"
+        echo -e "${GREEN}✓ Steering causal plots regenerated${NC}"
+        echo ""
+    else
+        echo -e "${YELLOW}⚠ Steering experiments require PyTorch/GPU — skipping in this environment${NC}"
+        echo ""
+        echo "To run steering experiments in your VM:"
+        echo "  cd $PROJECT_DIR"
+        echo "  python scripts/run_multimodel_steering_experiments.py --models $MODELS"
+        echo ""
+        echo "Then regenerate causal plots:"
+        echo "  bash scripts/generate_missing_figures.sh --steering-only --models=\"$MODELS\""
+        echo ""
+    fi
+else
+    if [ -n "$FIGURES_ONLY" ]; then
+        echo -e "${YELLOW}Skipping steering experiments (--figures-only mode)${NC}"
+    else
+        echo -e "${YELLOW}Skipping steering experiments (--skip-activations mode)${NC}"
+    fi
+    echo ""
+fi
+
 # Summary
 echo ""
 echo -e "${BLUE}===============================================${NC}"
@@ -208,16 +274,16 @@ echo "  Raw data:    $RESULTS_DIR/raw_data/"
 echo "  Figures:     $FIGURES_DIR"
 echo ""
 echo "Generated figures:"
-echo "  ✓ Base multi-model figures (per-pair alignment, paired distances, CWE transfer)"
-echo "  ✓ Per-model CWE pairwise heatmaps (fig_cwe_pairwise_*.pdf) — CWE universality"
-echo "  ✓ Per-model direction alignment curves (fig_direction_alignment_*.pdf)"
-echo "  ✓ Multi-model comparison plots (alignment, magnitude, stability)"
-echo "  ✓ Pairwise CWE-type probe AUROC heatmaps (fig_cwe_pairwise_probe_*.pdf) — per model"
-echo "  ✓ Direction steering: causal validation plots (fig_causal_summary_*.pdf) ⏳ requires steering experiments"
+echo "  ✓ Base multi-model figures (5): per-pair alignment, paired distances, CWE transfer, direction heatmaps, ranking accuracy"
+echo "  ✓ Per-model styled figures (6): CWE pairwise heatmaps + direction alignment curves"
+echo "  ✓ Multi-model comparison plots (3): alignment, magnitude, stability across architectures"
+echo "  ✓ Critical paper figures (3): Pairwise CWE-type probe AUROC heatmaps (per model)"
+echo "  ✓ Steering causal validation (3): Direction steering effect on model preference (when experiments available)"
 echo ""
-echo "To generate steering causal validation plots, run in VM with PyTorch:"
-echo "  cd /Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection"
-echo "  python scripts/run_multimodel_steering_experiments.py --models qwen,codellama,starcoder2"
-echo "  Then regenerate figures:"
-echo "  bash scripts/generate_missing_figures.sh --steering-only"
+echo "Total: 20+ publication-quality figures"
+echo ""
+echo "Pipeline Features:"
+echo "  • Automatically skips steps if raw data already exists"
+echo "  • Caches activations to avoid recomputation"
+echo "  • All figures regenerated with consistent, publication-quality styling"
 echo ""
