@@ -31,6 +31,11 @@ for arg in "$@"; do
         --models=*)
             MODELS="${arg#*=}"
             ;;
+        --models)
+            # also accept space-separated form: --models value
+            shift
+            MODELS="$1"
+            ;;
         *)
             echo "Unknown option: $arg"
             ;;
@@ -44,100 +49,9 @@ done
 if [ -z "$STEERING_ONLY" ]; then
     echo "Step 1: Generating pairwise CWE-type probe AUROC heatmaps..."
     echo ""
-    
-    # Create pairwise heatmap script
-    python3 <<'PYTHON_SCRIPT'
-import json
-import logging
-from pathlib import Path
-from collections import Counter
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
-from sklearn.preprocessing import StandardScaler
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    python3 "$SCRIPT_DIR/generate_pairwise_cwe_probes.py"
 
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.size": 10,
-    "figure.dpi": 150,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-})
-
-OUTPUT_DIR = Path("../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures")
-
-# Load Qwen data (main paper model)
-metadata_file = Path("sae_java_bug/artifacts/activations/mean_pool/20260307_150731/meta.json")
-
-if metadata_file.exists():
-    with open(metadata_file) as f:
-        metadata = json.load(f)
-    
-    cwes = [item.get("cwe", "unknown") for item in metadata]
-    cwe_counts = Counter(cwes)
-    
-    # Select top CWE types
-    top_cwes = [cwe for cwe, _ in cwe_counts.most_common(8)]
-    logger.info(f"Top CWE types: {top_cwes}")
-    
-    # Create heatmap (simulated from CWE universality patterns)
-    # In practice, this would be computed from actual probes
-    n_cwes = len(top_cwes)
-    matrix = np.zeros((n_cwes, n_cwes))
-    
-    # Pattern: diagonal ~100 (same CWE), off-diagonal 60-75 (separable but with overlap)
-    for i in range(n_cwes):
-        for j in range(n_cwes):
-            if i == j:
-                matrix[i, j] = 100
-            else:
-                # Typical AUROC for separating different CWE types
-                matrix[i, j] = 60 + np.random.RandomState(i*10+j).uniform(0, 15)
-    
-    # Generate figure
-    fig, ax = plt.subplots(figsize=(10, 9))
-    
-    im = ax.imshow(matrix, cmap="RdYlGn", vmin=50, vmax=100, aspect="auto")
-    
-    # Labels
-    cwe_labels = [c.split("-")[1] for c in top_cwes]
-    ax.set_xticks(range(len(top_cwes)))
-    ax.set_yticks(range(len(top_cwes)))
-    ax.set_xticklabels(cwe_labels, fontsize=10, rotation=45, ha="right")
-    ax.set_yticklabels(cwe_labels, fontsize=10)
-    ax.set_xlabel("Target CWE Type", fontsize=11, fontweight="bold")
-    ax.set_ylabel("Source CWE Type", fontsize=11, fontweight="bold")
-    
-    # Add values
-    for i in range(n_cwes):
-        for j in range(n_cwes):
-            ax.text(j, i, f"{matrix[i, j]:.0f}%", ha="center", va="center",
-                   color="black", fontsize=9)
-    
-    cbar = plt.colorbar(im, ax=ax, label="Probe AUROC (%)")
-    
-    ax.set_title("Pairwise CWE-type Probe AUROC\n(Peak layer, mean-token pooling)",
-                fontsize=12, fontweight="bold", pad=15)
-    
-    plt.tight_layout()
-    
-    output_file = OUTPUT_DIR / "fig_cwe_pairwise_probe.pdf"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_file, dpi=150, bbox_inches="tight")
-    logger.info(f"✓ Saved: {output_file}")
-    plt.close()
-else:
-    logger.warning("Metadata file not found - skipping pairwise CWE heatmap")
-
-PYTHON_SCRIPT
-    
     echo "✓ Pairwise CWE-type heatmaps generated"
     echo ""
 fi

@@ -188,7 +188,7 @@ echo ""
 echo -e "${YELLOW}Step 4: Generating critical paper figures...${NC}"
 echo ""
 
-bash generate_missing_figures.sh --models "$MODELS"
+bash generate_missing_figures.sh --models="$MODELS"
 
 echo ""
 echo -e "${GREEN}✓ Critical figures generated${NC}"

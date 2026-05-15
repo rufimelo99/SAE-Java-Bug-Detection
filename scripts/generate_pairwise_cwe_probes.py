@@ -35,12 +35,15 @@ mpl.rcParams.update({
     "axes.spines.right": False,
 })
 
-MODELS = ["qwen", "codellama", "starcoder2"]
-LAYERS = [0, 3, 7, 11, 15, 19, 23, 27]
-ACTIVATIONS_DIR = Path("sae_java_bug/artifacts/multi_model_probing")
-OUTPUT_DIR = Path("../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures")
+_SCRIPTS_DIR = Path(__file__).parent
+_PROJECT_DIR = _SCRIPTS_DIR.parent
 
-# Top CWE types to include (from DeltaSecommits)
+ACTIVATIONS_DIR = _PROJECT_DIR / "sae_java_bug" / "artifacts" / "multi_model_probing"
+METADATA_FILE = _PROJECT_DIR / "sae_java_bug" / "artifacts" / "activations" / "advanced_pool" / "20260308_214306" / "meta.json"
+OUTPUT_DIR = _PROJECT_DIR.parent / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations" / "figures"
+RESULTS_DIR = _PROJECT_DIR / "results" / "raw_data"
+
+# Top CWE types to include
 CWE_TYPES = [
     "CWE-119",  # Buffer Overflow
     "CWE-120",  # Buffer Copy without Bounds Check
@@ -53,29 +56,42 @@ CWE_TYPES = [
 ]
 
 
-def load_activations_and_metadata(model: str) -> Tuple[Dict, np.ndarray, np.ndarray]:
-    """Load NPZ activations and metadata for a model."""
-    npz_file = ACTIVATIONS_DIR / f"activations_{model}-7b.npz"
-    
-    if not npz_file.exists():
-        logger.warning(f"Activations not found: {npz_file}")
-        return {}, np.array([]), np.array([])
-    
-    logger.info(f"Loading activations from {npz_file.name}")
-    data = np.load(npz_file)
-    activations = {key: data[key] for key in data.files}
-    
-    # Load metadata
-    metadata_file = ACTIVATIONS_DIR / "meta.json"
-    if metadata_file.exists():
-        with open(metadata_file) as f:
-            metadata = json.load(f)
-        cwes = np.array([item.get("cwe", "unknown") for item in metadata])
+def discover_models() -> List[str]:
+    """Auto-discover models from available NPZ files."""
+    models = []
+    for npz in sorted(ACTIVATIONS_DIR.glob("activations_*.npz")):
+        # Strip "activations_" prefix and ".npz" suffix
+        name = npz.stem.replace("activations_", "")
+        models.append(name)
+    return models
+
+
+def load_metadata() -> np.ndarray:
+    """Load CWE labels from the metadata file."""
+    if not METADATA_FILE.exists():
+        logger.warning(f"Metadata file not found: {METADATA_FILE}")
+        return np.array([])
+    with open(METADATA_FILE) as f:
+        content = f.read().strip()
+    if content.startswith("["):
+        records = json.loads(content)
     else:
-        cwes = np.array(["unknown"] * activations[list(activations.keys())[0]].shape[0])
-    
-    logger.info(f"Loaded {len(cwes)} samples with CWE labels")
-    return activations, cwes, np.arange(len(cwes))
+        records = [json.loads(line) for line in content.splitlines() if line.strip()]
+    return np.array([r.get("cwe", "unknown") for r in records])
+
+
+def get_peak_layer(activations: Dict[str, np.ndarray]) -> int:
+    """Return the highest available layer index from the NPZ keys."""
+    layers = sorted(
+        int(k.split("_")[1])
+        for k in activations
+        if k.startswith("layer_") and k.endswith("_vuln_mean")
+    )
+    if not layers:
+        return 15
+    # Use the 75th percentile layer as "peak" (avoid very last which may be noisy)
+    idx = max(0, int(len(layers) * 0.75) - 1)
+    return layers[idx]
 
 
 def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int = 5) -> float:
@@ -85,129 +101,211 @@ def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int
     """
     if len(np.unique(y)) < 2:
         return 0.5
-    
+
+    n_splits = min(cv, int(y.sum()), int((y == 0).sum()))
+    if n_splits < 2:
+        return 0.5
+
     n_comp = min(n_components, X.shape[1], X.shape[0] - 1)
-    
+
     clf = LogisticRegression(C=0.1, max_iter=1000, class_weight="balanced", random_state=42)
-    skf = StratifiedKFold(n_splits=min(cv, y.sum(), (y == 0).sum()), shuffle=True, random_state=42)
-    
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+
     y_score = np.zeros(len(y), dtype=float)
     for tr, te in skf.split(X, y):
         scaler = StandardScaler()
         pca = PCA(n_components=min(n_comp, len(tr) - 1), random_state=42)
-        
+
         Xtr = pca.fit_transform(scaler.fit_transform(X[tr]))
         Xte = pca.transform(scaler.transform(X[te]))
-        
+
         clf.fit(Xtr, y[tr])
         y_score[te] = clf.predict_proba(Xte)[:, 1]
-    
+
     try:
         auroc = roc_auc_score(y, y_score)
-    except:
+    except Exception:
         auroc = 0.5
-    
+
     return auroc
 
 
-def generate_pairwise_heatmap(model: str):
-    """Generate pairwise CWE probe AUROC heatmap for one model."""
-    logger.info(f"\nGenerating pairwise CWE probes for {model}...")
-    
-    activations, cwes, idx_array = load_activations_and_metadata(model)
-    
-    if not activations:
-        logger.warning(f"Skipping {model} - no activations")
-        return
-    
-    # Determine which CWEs are available
-    available_cwes = sorted([c for c in np.unique(cwes) if c in CWE_TYPES])
-    if len(available_cwes) < 2:
-        logger.warning(f"Not enough CWE types for {model}")
-        return
-    
-    logger.info(f"Available CWEs: {available_cwes}")
-    
-    # Build matrix: auroc[i, j] = auroc for CWE_i vs CWE_j at peak layer
-    n_cwes = len(available_cwes)
-    matrix = np.zeros((n_cwes, n_cwes))
-    
-    for i, cwe1 in enumerate(available_cwes):
-        for j, cwe2 in enumerate(available_cwes):
-            if i == j:
-                matrix[i, j] = 100  # Diagonal: perfect separation
-                continue
-            
-            # Get indices for both CWEs
-            mask1 = cwes == cwe1
-            mask2 = cwes == cwe2
-            
-            if mask1.sum() == 0 or mask2.sum() == 0:
-                matrix[i, j] = 50
-                continue
-            
-            # Use activations from peak layer (L15 typically)
-            peak_layer = 15
-            key = f"layer_{peak_layer}_vuln_mean"
-            
-            if key not in activations:
-                matrix[i, j] = 50
-                continue
-            
-            X = activations[key]
-            y = np.concatenate([np.ones(mask1.sum()), np.zeros(mask2.sum())])
-            X_subset = np.vstack([X[mask1], X[mask2]])
-            
-            auroc = probe_pairwise(X_subset, y) * 100
-            matrix[i, j] = auroc
-            
-            logger.info(f"  {cwe1} vs {cwe2}: {auroc:.1f}%")
-    
-    # Generate figure
+def save_results(model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int):
+    """Save AUROC matrix to JSON for later figure regeneration."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "model": model_full,
+        "peak_layer": peak_layer,
+        "cwe_types": available_cwes,
+        "auroc_matrix": matrix.tolist(),
+    }
+    out = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
+    with open(out, "w") as f:
+        json.dump(payload, f, indent=2)
+    logger.info(f"✓ Data saved: {out}")
+
+
+def load_results(model_full: str) -> Dict:
+    """Load previously saved AUROC matrix from JSON."""
+    path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
+def plot_heatmap(model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int):
+    """Render and save the heatmap PDF from a matrix."""
     fig, ax = plt.subplots(figsize=(9, 8))
-    
     im = ax.imshow(matrix, cmap="RdYlGn", vmin=50, vmax=100, aspect="auto")
-    
-    # Labels
+
     cwe_short = [c.split("-")[1] for c in available_cwes]
     ax.set_xticks(range(len(available_cwes)))
     ax.set_yticks(range(len(available_cwes)))
-    ax.set_xticklabels(cwe_short, fontsize=10, rotation=45)
+    ax.set_xticklabels(cwe_short, fontsize=10, rotation=45, ha="right")
     ax.set_yticklabels(cwe_short, fontsize=10)
     ax.set_xlabel("CWE Type (target)", fontsize=11, fontweight="bold")
     ax.set_ylabel("CWE Type (source)", fontsize=11, fontweight="bold")
-    
-    # Add text annotations
+
     for i in range(len(available_cwes)):
         for j in range(len(available_cwes)):
-            text = ax.text(j, i, f"{matrix[i, j]:.0f}%",
-                          ha="center", va="center", color="black", fontsize=9)
-    
-    # Colorbar
-    cbar = plt.colorbar(im, ax=ax, label="AUROC (%)")
-    
-    # Title
-    ax.set_title(f"Pairwise CWE-type Probe AUROC: {model.upper()}\n(Peak layer, mean-token pooling)",
-                fontsize=12, fontweight="bold", pad=15)
-    
+            ax.text(j, i, f"{matrix[i, j]:.0f}%",
+                    ha="center", va="center", color="black", fontsize=9)
+
+    plt.colorbar(im, ax=ax, label="AUROC (%)")
+    ax.set_title(f"Pairwise CWE-type Probe AUROC: {model_full}\n(Layer {peak_layer}, mean-token pooling)",
+                 fontsize=12, fontweight="bold", pad=15)
+
     plt.tight_layout()
-    
-    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model}.pdf"
+
+    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model_full}.pdf"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
-    logger.info(f"✓ Saved: {output_file}")
+    logger.info(f"✓ Figure saved: {output_file}")
     plt.close()
 
 
+def run_probing(model_full: str, cwes: np.ndarray):
+    """Compute AUROC matrix from activations and save data + figure."""
+    logger.info(f"\nGenerating pairwise CWE probes for {model_full}...")
+
+    npz_file = ACTIVATIONS_DIR / f"activations_{model_full}.npz"
+    if not npz_file.exists():
+        logger.warning(f"Activations not found: {npz_file}")
+        return
+
+    data = np.load(npz_file)
+    activations = {key: data[key] for key in data.files}
+
+    if len(cwes) != next(iter(activations.values())).shape[0]:
+        logger.warning(
+            f"CWE label count ({len(cwes)}) != activation rows "
+            f"({next(iter(activations.values())).shape[0]}) for {model_full}"
+        )
+        return
+
+    peak_layer = get_peak_layer(activations)
+    key = f"layer_{peak_layer}_vuln_mean"
+    if key not in activations:
+        logger.warning(f"Key {key} not found in {npz_file.name}")
+        return
+
+    X_all = activations[key]
+
+    available_cwes = sorted([c for c in np.unique(cwes) if c in CWE_TYPES])
+    if len(available_cwes) < 2:
+        logger.warning(f"Not enough CWE types for {model_full} (found: {available_cwes})")
+        return
+
+    logger.info(f"Available CWEs: {available_cwes}, peak layer: {peak_layer}")
+
+    n_cwes = len(available_cwes)
+    matrix = np.zeros((n_cwes, n_cwes))
+
+    for i, cwe1 in enumerate(available_cwes):
+        for j, cwe2 in enumerate(available_cwes):
+            if i == j:
+                matrix[i, j] = 100
+                continue
+
+            mask1 = cwes == cwe1
+            mask2 = cwes == cwe2
+
+            if mask1.sum() == 0 or mask2.sum() == 0:
+                matrix[i, j] = 50
+                continue
+
+            y = np.concatenate([np.ones(mask1.sum()), np.zeros(mask2.sum())])
+            X_subset = np.vstack([X_all[mask1], X_all[mask2]])
+
+            auroc = probe_pairwise(X_subset, y) * 100
+            matrix[i, j] = auroc
+            logger.info(f"  {cwe1} vs {cwe2}: {auroc:.1f}%")
+
+    save_results(model_full, available_cwes, matrix, peak_layer)
+    plot_heatmap(model_full, available_cwes, matrix, peak_layer)
+
+
+def figures_from_saved(model_full: str):
+    """Regenerate figure from saved JSON without re-running probing."""
+    results = load_results(model_full)
+    if not results:
+        logger.warning(f"No saved data for {model_full} — run without --figures-only first")
+        return
+    matrix = np.array(results["auroc_matrix"])
+    plot_heatmap(model_full, results["cwe_types"], matrix, results["peak_layer"])
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--figures-only", action="store_true",
+                        help="Regenerate figures from saved JSON without re-running probing")
+    parser.add_argument("--skip-existing", action="store_true",
+                        help="Skip models that already have a saved JSON result")
+    args = parser.parse_args()
+
+    if args.figures_only:
+        logger.info("Regenerating figures from saved data...")
+        saved = sorted(RESULTS_DIR.glob("*_cwe_pairwise_probe.json"))
+        if not saved:
+            logger.error(f"No saved results found in {RESULTS_DIR}")
+            return
+        for path in saved:
+            model_full = path.stem.replace("_cwe_pairwise_probe", "")
+            try:
+                figures_from_saved(model_full)
+            except Exception as e:
+                logger.error(f"Error plotting {model_full}: {e}")
+        logger.info("\n✓ Figures regenerated!")
+        return
+
     logger.info("Generating pairwise CWE probe AUROC heatmaps...")
-    
-    for model in MODELS:
+    cwes = load_metadata()
+    if len(cwes) == 0:
+        logger.error("No metadata loaded — cannot generate heatmaps")
+        return
+
+    models = discover_models()
+    if not models:
+        logger.warning(f"No NPZ files found in {ACTIVATIONS_DIR}")
+        return
+
+    logger.info(f"Models found: {models}")
+
+    for model_full in models:
+        if args.skip_existing:
+            json_path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
+            if json_path.exists():
+                logger.info(f"  Skipping {model_full} (already computed, regenerating figure)")
+                r = load_results(model_full)
+                plot_heatmap(model_full, r["cwe_types"], np.array(r["auroc_matrix"]), r["peak_layer"])
+                continue
         try:
-            generate_pairwise_heatmap(model)
+            run_probing(model_full, cwes)
         except Exception as e:
-            logger.error(f"Error processing {model}: {e}")
-    
+            logger.error(f"Error processing {model_full}: {e}")
+
     logger.info("\n✓ Pairwise CWE probe generation complete!")
 
 
