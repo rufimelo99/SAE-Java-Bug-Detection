@@ -130,14 +130,16 @@ def probe_pairwise(X: np.ndarray, y: np.ndarray, n_components: int = 50, cv: int
     return auroc
 
 
-def save_results(model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int):
-    """Save AUROC matrix to JSON for later figure regeneration."""
+def save_results(model_full: str, available_cwes: List[str],
+                 layer_matrices: Dict[int, np.ndarray], peak_layer: int):
+    """Save per-layer AUROC matrices to JSON for later figure regeneration."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": model_full,
         "peak_layer": peak_layer,
         "cwe_types": available_cwes,
-        "auroc_matrix": matrix.tolist(),
+        "layers": {str(layer): {"auroc_matrix": mat.tolist()}
+                   for layer, mat in sorted(layer_matrices.items())},
     }
     out = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
     with open(out, "w") as f:
@@ -185,8 +187,28 @@ def plot_heatmap(model_full: str, available_cwes: List[str], matrix: np.ndarray,
     plt.close()
 
 
+def _probe_matrix(X_all: np.ndarray, cwes: np.ndarray, available_cwes: List[str]) -> np.ndarray:
+    """Compute the n_cwes × n_cwes AUROC matrix for one layer's activations."""
+    n_cwes = len(available_cwes)
+    matrix = np.zeros((n_cwes, n_cwes))
+    for i, cwe1 in enumerate(available_cwes):
+        for j, cwe2 in enumerate(available_cwes):
+            if i == j:
+                matrix[i, j] = 100
+                continue
+            mask1 = cwes == cwe1
+            mask2 = cwes == cwe2
+            if mask1.sum() == 0 or mask2.sum() == 0:
+                matrix[i, j] = 50
+                continue
+            y = np.concatenate([np.ones(mask1.sum()), np.zeros(mask2.sum())])
+            X_subset = np.vstack([X_all[mask1], X_all[mask2]])
+            matrix[i, j] = probe_pairwise(X_subset, y) * 100
+    return matrix
+
+
 def run_probing(model_full: str, cwes: np.ndarray):
-    """Compute AUROC matrix from activations and save data + figure."""
+    """Compute AUROC matrix for every layer, save all to JSON, plot peak layer."""
     logger.info(f"\nGenerating pairwise CWE probes for {model_full}...")
 
     npz_file = ACTIVATIONS_DIR / f"activations_{model_full}.npz"
@@ -204,56 +226,47 @@ def run_probing(model_full: str, cwes: np.ndarray):
         )
         return
 
-    peak_layer = get_peak_layer(activations)
-    key = f"layer_{peak_layer}_vuln_mean"
-    if key not in activations:
-        logger.warning(f"Key {key} not found in {npz_file.name}")
+    all_layers = sorted(
+        int(k.split("_")[1])
+        for k in activations
+        if k.startswith("layer_") and k.endswith("_vuln_mean")
+    )
+    if not all_layers:
+        logger.warning(f"No layer keys found in {npz_file.name}")
         return
-
-    X_all = activations[key]
 
     available_cwes = sorted([c for c in np.unique(cwes) if c in CWE_TYPES])
     if len(available_cwes) < 2:
         logger.warning(f"Not enough CWE types for {model_full} (found: {available_cwes})")
         return
 
-    logger.info(f"Available CWEs: {available_cwes}, peak layer: {peak_layer}")
+    peak_layer = get_peak_layer(activations)
+    logger.info(f"Available CWEs: {available_cwes}, layers: {all_layers}, peak: {peak_layer}")
 
-    n_cwes = len(available_cwes)
-    matrix = np.zeros((n_cwes, n_cwes))
+    layer_matrices: Dict[int, np.ndarray] = {}
+    for layer in all_layers:
+        key = f"layer_{layer}_vuln_mean"
+        logger.info(f"  Layer {layer}...")
+        layer_matrices[layer] = _probe_matrix(activations[key], cwes, available_cwes)
 
-    for i, cwe1 in enumerate(available_cwes):
-        for j, cwe2 in enumerate(available_cwes):
-            if i == j:
-                matrix[i, j] = 100
-                continue
-
-            mask1 = cwes == cwe1
-            mask2 = cwes == cwe2
-
-            if mask1.sum() == 0 or mask2.sum() == 0:
-                matrix[i, j] = 50
-                continue
-
-            y = np.concatenate([np.ones(mask1.sum()), np.zeros(mask2.sum())])
-            X_subset = np.vstack([X_all[mask1], X_all[mask2]])
-
-            auroc = probe_pairwise(X_subset, y) * 100
-            matrix[i, j] = auroc
-            logger.info(f"  {cwe1} vs {cwe2}: {auroc:.1f}%")
-
-    save_results(model_full, available_cwes, matrix, peak_layer)
-    plot_heatmap(model_full, available_cwes, matrix, peak_layer)
+    save_results(model_full, available_cwes, layer_matrices, peak_layer)
+    plot_heatmap(model_full, available_cwes, layer_matrices[peak_layer], peak_layer)
 
 
-def figures_from_saved(model_full: str):
+def figures_from_saved(model_full: str, layer: int = None):
     """Regenerate figure from saved JSON without re-running probing."""
     results = load_results(model_full)
     if not results:
         logger.warning(f"No saved data for {model_full} — run without --figures-only first")
         return
-    matrix = np.array(results["auroc_matrix"])
-    plot_heatmap(model_full, results["cwe_types"], matrix, results["peak_layer"])
+    plot_layer = layer if layer is not None else results["peak_layer"]
+    layer_data = results["layers"].get(str(plot_layer))
+    if layer_data is None:
+        available = sorted(results["layers"].keys(), key=int)
+        logger.warning(f"Layer {plot_layer} not found for {model_full}. Available: {available}")
+        return
+    matrix = np.array(layer_data["auroc_matrix"])
+    plot_heatmap(model_full, results["cwe_types"], matrix, plot_layer)
 
 
 def main():
@@ -263,6 +276,8 @@ def main():
                         help="Regenerate figures from saved JSON without re-running probing")
     parser.add_argument("--skip-existing", action="store_true",
                         help="Skip models that already have a saved JSON result")
+    parser.add_argument("--layer", type=int, default=None,
+                        help="Layer to plot (default: peak layer stored in JSON)")
     args = parser.parse_args()
 
     if args.figures_only:
@@ -274,7 +289,7 @@ def main():
         for path in saved:
             model_full = path.stem.replace("_cwe_pairwise_probe", "")
             try:
-                figures_from_saved(model_full)
+                figures_from_saved(model_full, layer=args.layer)
             except Exception as e:
                 logger.error(f"Error plotting {model_full}: {e}")
         logger.info("\n✓ Figures regenerated!")
@@ -298,8 +313,7 @@ def main():
             json_path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
             if json_path.exists():
                 logger.info(f"  Skipping {model_full} (already computed, regenerating figure)")
-                r = load_results(model_full)
-                plot_heatmap(model_full, r["cwe_types"], np.array(r["auroc_matrix"]), r["peak_layer"])
+                figures_from_saved(model_full, layer=args.layer)
                 continue
         try:
             run_probing(model_full, cwes)
