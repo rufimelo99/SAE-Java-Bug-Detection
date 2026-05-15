@@ -185,7 +185,7 @@ class ExperimentPipeline:
         # For each layer, compute transfer rates
         transfer_by_layer = {}
 
-        for layer in LAYERS:
+        for layer in get_layers(activations):
             key_vuln = f"layer_{layer}_vuln_mean"
             key_sec = f"layer_{layer}_secure_mean"
 
@@ -260,7 +260,7 @@ class ExperimentPipeline:
             "ranking_accuracy": {},
         }
 
-        for layer in LAYERS:
+        for layer in get_layers(activations):
             key_vuln = f"layer_{layer}_vuln_mean"
             key_sec = f"layer_{layer}_secure_mean"
 

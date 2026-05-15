@@ -32,10 +32,19 @@ mpl.rcParams.update({
 logging.basicConfig(level=logging.INFO, format="%(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-MODELS = ["qwen", "codellama", "starcoder2"]
 FAMILIES = ["memory_safety", "injection", "resource", "info_disclosure", "control_flow"]
-RESULTS_DIR = Path("results/raw_data")
-OUTPUT_DIR = Path("../On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures")
+
+_SCRIPTS_DIR = Path(__file__).parent
+RESULTS_DIR = _SCRIPTS_DIR.parent / "results" / "raw_data"
+OUTPUT_DIR = _SCRIPTS_DIR.parent.parent / "On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations" / "figures"
+
+
+def discover_models() -> list:
+    """Auto-discover models that have direction_geometry results."""
+    return sorted(
+        p.stem.replace("_direction_geometry", "")
+        for p in RESULTS_DIR.glob("*_direction_geometry.json")
+    )
 
 
 def load_results(model: str) -> Dict[str, Any]:
@@ -150,8 +159,8 @@ def generate_direction_alignment_by_cwe(model: str, results: Dict[str, Any]):
 def generate_model_summary_table():
     """Generate summary statistics table for all models."""
     rows = []
-    
-    for model in MODELS:
+
+    for model in discover_models():
         results = load_results(model)
         if "direction_geometry" not in results:
             continue
@@ -187,24 +196,23 @@ def generate_model_summary_table():
 
 def main():
     logger.info("Generating multi-model styled figures...")
-    
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
-    for model in MODELS:
+    models = discover_models()
+    logger.info(f"Models found: {models}")
+
+    for model in models:
         logger.info(f"\nProcessing {model}...")
         results = load_results(model)
-        
+
         if not results:
             logger.warning(f"No results found for {model}")
             continue
-        
-        # Generate figures
+
         generate_cwe_pairwise_heatmap(model, results)
         generate_direction_alignment_by_cwe(model, results)
-    
-    # Generate summary table
+
     generate_model_summary_table()
-    
     logger.info("\n✓ All figures generated successfully!")
 
 
