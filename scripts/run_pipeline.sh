@@ -183,6 +183,16 @@ python generate_steering_style_plots.py
 echo ""
 echo -e "${GREEN}✓ Multi-model styled figures generated${NC}"
 
+# Step 4: Generate missing critical figures
+echo ""
+echo -e "${YELLOW}Step 4: Generating critical paper figures...${NC}"
+echo ""
+
+bash generate_missing_figures.sh --models "$MODELS"
+
+echo ""
+echo -e "${GREEN}✓ Critical figures generated${NC}"
+
 # Summary
 echo ""
 echo -e "${BLUE}===============================================${NC}"
@@ -199,4 +209,9 @@ echo "  ✓ Multi-model base figures (per-pair alignment, paired distances, etc.
 echo "  ✓ Per-model CWE pairwise heatmaps (fig_cwe_pairwise_*.pdf)"
 echo "  ✓ Per-model direction alignment (fig_direction_alignment_*.pdf)"
 echo "  ✓ Multi-model comparison plots (alignment, magnitude, stability)"
+echo "  ✓ Pairwise CWE-type probe AUROC heatmap (fig_cwe_pairwise_probe.pdf)"
+echo "  ✓ Direction steering: causal validation plots (fig_causal_summary_*.pdf)"
+echo ""
+echo "Note: Steering experiments for CodeLlama/StarCoder2 require:"
+echo "  python scripts/run_corrected_steering_experiment.py --models codellama,starcoder2"
 echo ""
