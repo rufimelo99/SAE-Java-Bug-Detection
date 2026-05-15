@@ -18,7 +18,10 @@
 #
 # Usage:
 #   ./run_pipeline.sh [--models=qwen,codellama,starcoder2] [--skip-existing]
-#                     [--skip-activations] [--figures-only]
+#                     [--skip-activations] [--figures-only] [--with-datasets]
+#
+# Options:
+#   --with-datasets: Also run comparative analysis on SVEN and PreciseBugs datasets
 #
 
 set -e
@@ -36,6 +39,7 @@ SKIP_EXISTING=""
 SKIP_ACTIVATIONS=""
 FORCE_ACTIVATIONS=""
 FIGURES_ONLY=""
+WITH_DATASETS=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -65,9 +69,12 @@ for arg in "$@"; do
         --figures-only)
             FIGURES_ONLY="yes"
             ;;
+        --with-datasets)
+            WITH_DATASETS="yes"
+            ;;
         *)
             echo "Unknown option: $arg"
-            echo "Usage: $0 [--models=...] [--language=c] [--skip-existing] [--skip-activations] [--force-activations] [--figures-only]"
+            echo "Usage: $0 [--models=...] [--language=c] [--skip-existing] [--skip-activations] [--force-activations] [--figures-only] [--with-datasets]"
             exit 1
             ;;
     esac
@@ -262,6 +269,29 @@ else
     echo ""
 fi
 
+# Step 6: Multi-dataset comparative analysis (optional)
+if [ -n "$WITH_DATASETS" ]; then
+    echo ""
+    echo -e "${YELLOW}Step 6: Running multi-dataset comparative analysis...${NC}"
+    echo ""
+
+    cd "$SCRIPT_DIR"
+
+    # Check if multi-dataset comparison script exists
+    if [ -f "$PROJECT_DIR/sae_java_bug/sparse_autoencoders/notebooks/multi_dataset_comparison.py" ]; then
+        python "$PROJECT_DIR/sae_java_bug/sparse_autoencoders/notebooks/multi_dataset_comparison.py"
+        echo ""
+        echo -e "${GREEN}✓ Multi-dataset comparative analysis completed${NC}"
+        echo ""
+    else
+        echo -e "${YELLOW}⚠ Multi-dataset comparison script not found${NC}"
+        echo ""
+    fi
+else
+    echo -e "${YELLOW}Skipping multi-dataset analysis (use --with-datasets flag to enable)${NC}"
+    echo ""
+fi
+
 # Summary
 echo ""
 echo -e "${BLUE}===============================================${NC}"
@@ -279,11 +309,18 @@ echo "  ✓ Per-model styled figures (6): CWE pairwise heatmaps + direction alig
 echo "  ✓ Multi-model comparison plots (3): alignment, magnitude, stability across architectures"
 echo "  ✓ Critical paper figures (3): Pairwise CWE-type probe AUROC heatmaps (per model)"
 echo "  ✓ Steering causal validation (3): Direction steering effect on model preference (when experiments available)"
+if [ -n "$WITH_DATASETS" ]; then
+    echo "  ✓ Multi-dataset comparative analysis: SVEN and PreciseBugs cross-dataset validation"
+fi
 echo ""
-echo "Total: 20+ publication-quality figures"
+echo "Total: 20+ publication-quality figures (+ comparative analysis)"
 echo ""
 echo "Pipeline Features:"
 echo "  • Automatically skips steps if raw data already exists"
 echo "  • Caches activations to avoid recomputation"
 echo "  • All figures regenerated with consistent, publication-quality styling"
+echo "  • Optional multi-dataset comparative analysis (--with-datasets)"
+echo ""
+echo "To run with multi-dataset analysis:"
+echo "  ./run_pipeline.sh --with-datasets"
 echo ""
