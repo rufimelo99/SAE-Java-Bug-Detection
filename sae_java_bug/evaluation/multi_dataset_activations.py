@@ -303,13 +303,20 @@ def main():
         output_dir = dataset_cfg["output_dir"]
 
         # Load pairs
-        if dataset == "deltasecommits":
-            pairs = load_deltasecommits_pairs(data_source)
-        elif dataset == "sven":
-            pairs = load_sven_pairs(data_source)
-        elif dataset == "precisebugs":
-            pairs = load_precisebugs_pairs(data_source)
-        else:
+        try:
+            if dataset == "deltasecommits":
+                pairs = load_deltasecommits_pairs(data_source)
+            elif dataset == "sven":
+                pairs = load_sven_pairs(data_source)
+            elif dataset == "precisebugs":
+                pairs = load_precisebugs_pairs(data_source)
+            else:
+                continue
+        except FileNotFoundError as e:
+            logger.warning(f"Skipping {dataset}: data not found ({e})")
+            continue
+        except Exception as e:
+            logger.error(f"Failed to load {dataset}: {e}")
             continue
 
         if not pairs:

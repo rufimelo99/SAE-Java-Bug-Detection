@@ -70,12 +70,18 @@ CWE_TYPES = [
 ]
 
 
+_KNOWN_DATASETS = {"deltasecommits", "sven", "precisebugs"}
+
+
 def discover_models() -> List[str]:
-    """Auto-discover models from available NPZ files."""
+    """Auto-discover models from available NPZ files, skipping dataset-prefixed ones."""
     models = []
     for npz in sorted(ACTIVATIONS_DIR.glob("activations_*.npz")):
-        # Strip "activations_" prefix and ".npz" suffix
         name = npz.stem.replace("activations_", "")
+        # Skip files named activations_{dataset}_{model}.npz
+        prefix = name.split("_")[0]
+        if prefix in _KNOWN_DATASETS:
+            continue
         models.append(name)
     return models
 
@@ -184,51 +190,41 @@ def plot_heatmap(
     model_full: str, available_cwes: List[str], matrix: np.ndarray, peak_layer: int
 ):
     """Render and save the heatmap PDF from a matrix."""
-    import seaborn as sns
-
-    # Convert percentage (0-100) to decimal (0.0-1.0) if needed
+    # Normalise to [0, 1] for display
     if matrix.max() > 1.5:
         matrix_norm = matrix / 100.0
     else:
-        matrix_norm = matrix
+        matrix_norm = matrix.copy()
+
+    n = len(available_cwes)
+    cwe_short = [c.split("-")[1] for c in available_cwes]
 
     fig, ax = plt.subplots(figsize=(8.5, 7.5))
 
-    cwe_short = [c.split("-")[1] for c in available_cwes]
+    im = ax.imshow(matrix_norm, cmap="RdYlGn", vmin=0.4, vmax=1.0, aspect="equal")
 
-    # Use seaborn heatmap with proper styling
-    sns.heatmap(
-        matrix_norm,
-        annot=True,
-        fmt=".2f",
-        cmap="RdYlGn",
-        vmin=0.4,
-        vmax=1.0,
-        ax=ax,
-        xticklabels=cwe_short,
-        yticklabels=cwe_short,
-        linewidths=0.4,
-        square=True,
-        cbar=False,
-        cbar_kws={"label": "AUROC"},
-    )
+    # Grey diagonal for self-pairs
+    for i in range(n):
+        ax.add_patch(plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0))
 
-    # Add grey diagonal for self-pairs
-    for i in range(len(available_cwes)):
-        ax.add_patch(plt.Rectangle((i, i), 1, 1, fill=True, color="#cccccc", lw=0))
+    # Cell annotations
+    for i in range(n):
+        for j in range(n):
+            color = "black"
+            ax.text(j, i, f"{matrix_norm[i, j]:.2f}",
+                    ha="center", va="center", fontsize=9, color=color)
 
-    ax.set_xlabel("CWE Type (target)", fontsize=10, fontweight="normal")
-    ax.set_ylabel("CWE Type (source)", fontsize=10, fontweight="normal")
-    ax.set_title(
-        f"Pairwise CWE probe across layers — peak AUROC\n(vulnerable-side mean-token; green = separable, yellow = chance)",
-        fontsize=10,
-        fontweight="normal",
-        pad=12,
-    )
-
-    # Rotate x labels
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
     ax.set_xticklabels(cwe_short, rotation=45, ha="right", fontsize=9)
     ax.set_yticklabels(cwe_short, fontsize=9)
+    ax.set_xlabel("CWE Type (target)", fontsize=10)
+    ax.set_ylabel("CWE Type (source)", fontsize=10)
+    ax.set_title(
+        f"Pairwise CWE probe across layers — peak AUROC\n"
+        f"(vulnerable-side mean-token; green = separable, yellow = chance)",
+        fontsize=10, pad=12,
+    )
 
     plt.tight_layout()
 
