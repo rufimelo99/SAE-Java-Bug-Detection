@@ -1,126 +1,187 @@
-# Multi-Dataset Pipeline: Quick Start Guide
+# Quick Start: Steering Analysis Pipeline
 
-## 🚀 Run Everything (All Datasets, All Models, All Layers)
-
-```bash
-cd /Users/rmelo/Documents/GitHub/SAE-Java-Bug-Detection
-./run_pipeline.sh --datasets=deltasecommits,sven,precisebugs
-```
-
-**Time**: ~6-9 hours (GPU required)  
-**Output**: Activations + Experiments + Figures for all datasets
-
-## ⚡ Just Extract Activations (No Experiments)
+## TL;DR - 3 Commands
 
 ```bash
-./run_pipeline.sh --datasets=deltasecommits,sven,precisebugs --skip-existing
+# 1. Generate figures from all existing analyses (5 min)
+python scripts/pipeline_full_analysis.py --stage geometry
+
+# 2. Generate steering plots from existing Qwen data (5 min)
+python scripts/regenerate_steering_plots_from_existing.py --models qwen
+
+# 3. Run steering experiments for all models [SLOW - skip if you just want figures]
+python scripts/pipeline_full_analysis.py --stage all
 ```
 
-**Time**: ~2-3 hours  
-**Output**: Cached activation NPZ files in `sae_java_bug/artifacts/multi_model_probing/`
+## What Was Added
 
-## 🎨 Generate Figures Only (From Cached Data)
+A production-grade **direction steering pipeline** that:
+
+✓ **Validates causality** - Tests if vulnerability directions mechanistically affect model behavior  
+✓ **Multi-model support** - Qwen-7B, CodeLlama-7B, StarCoder2-7B  
+✓ **Publication-ready plots** - Two-panel steering effect figures  
+✓ **Fully integrated** - Coordinates with existing geometry and CWE analysis  
+✓ **Handles legacy data** - Works with existing Qwen steering experiments  
+
+## The Steering Analysis
+
+### What It Does
+
+1. Loads 100 real vulnerable-secure code pairs
+2. Computes vulnerability direction at each layer
+3. Applies steering: manipulates direction strength (α) from -20 to +20
+4. Measures effect: how much does preference shift?
+5. Generates plots showing causal impact
+
+### Why It Matters
+
+> **Proof that vulnerability directions are real, not statistical artifacts.**
+>
+> Just because we can extract a direction doesn't mean it's mechanistically important. 
+> Steering proves the model actually uses this signal in its decisions.
+
+### What to Expect
+
+**Good signs:**
+- ✓ Preference increases monotonically with steering strength
+- ✓ Early layers (L3) have stronger effects than late layers
+- ✓ Effect pattern is consistent across models
+
+**Example results (Qwen-7B):**
+```
+Layer 3:  effect = +0.126  [strongest]
+Layer 7:  effect = +0.030
+Layer 11: effect = +0.015
+Layer 15: effect = +0.010
+Layer 19: effect = +0.008
+Layer 23: effect = +0.007  [weakest]
+```
+
+## Files Created
+
+### Pipeline Scripts
+```
+scripts/
+├── pipeline_full_analysis.py           # Main coordinator
+├── run_steering_pipeline.py             # Experiment runner
+├── regenerate_steering_plots.py         # Plot generator
+└── regenerate_steering_plots_from_existing.py  # Legacy data support
+```
+
+### Documentation
+```
+├── PIPELINE_README.md                  # Full pipeline documentation
+├── STEERING_ANALYSIS_GUIDE.md          # Steering methodology & usage
+└── QUICK_START.md                      # This file
+```
+
+### Output Figures
+```
+On-the-Absence-of-Global-Anomalies.../figures/
+├── fig_causal_summary_qwen_100samples.pdf
+├── fig_causal_summary_codellama_100samples.pdf      [if run]
+├── fig_causal_summary_starcoder2_100samples.pdf     [if run]
+└── fig_steering_multimodel_comparison_100samples.pdf [if run]
+```
+
+## One-Time Setup
+
+### Already Done ✓
+
+- Qwen-7B steering results exist: `results_real_preference_steering_100samples.json`
+- Can regenerate plots immediately
+- All scripts created and tested
+
+### To Add Other Models
+
+Need to run steering experiments (slow, GPU recommended):
 
 ```bash
-./run_pipeline.sh --datasets=deltasecommits,sven,precisebugs --figures-only
+# Run for CodeLlama and StarCoder2 (2-4 hours on GPU)
+python scripts/run_steering_pipeline.py --models codellama,starcoder2
+
+# Then generate plots
+python scripts/regenerate_steering_plots.py --models codellama,starcoder2
 ```
 
-**Time**: ~1-2 minutes  
-**Output**: PDF figures in `On-the-Absence-of-Global-Anomalies-in-Vulnerable-Code-Representations/figures/`
+## Common Tasks
 
-## 🧪 Custom Configuration
-
-### Different Models
+### Just Regenerate Qwen Plot
 ```bash
-# Use CodeLlama 13B and StarCoder2 15B
-./run_pipeline.sh --datasets=deltasecommits,sven,precisebugs \
-                  --models=codellama-13b,starcoder2-15b
+python scripts/regenerate_steering_plots_from_existing.py --models qwen
 ```
+⏱️ 5 minutes
 
-### Specific Layers Only
+### Run All Geometry Analysis
 ```bash
-# Just layers 7, 15, 23
-./run_pipeline.sh --datasets=deltasecommits,sven,precisebugs \
-                  --layers=7,15,23
+python scripts/pipeline_full_analysis.py --stage geometry
 ```
+⏱️ 10 minutes
 
-### Single Dataset
+### Full Pipeline (All Stages)
 ```bash
-# Just SVEN
-./run_pipeline.sh --datasets=sven --figures-only
+python scripts/pipeline_full_analysis.py --stage all
 ```
+⏱️ 3+ hours on GPU, requires GPU memory
 
-## 📊 Available Options
-
-| Parameter | Default | Example |
-|-----------|---------|---------|
-| `--datasets` | `deltasecommits` | `deltasecommits,sven,precisebugs` |
-| `--models` | `qwen-7b,codellama-7b,starcoder2-7b` | `codellama-13b` |
-| `--layers` | `3,7,11,15,19,23,27` | `7,15,23` |
-| `--figures-only` | *(skip)* | Use for cached figures |
-| `--skip-existing` | *(skip)* | Skip already-computed experiments |
-| `--language` | `all` | `c` |
-
-## 📁 What Gets Generated
-
-| Location | Content |
-|----------|---------|
-| `results/raw_data/` | JSON experiment results |
-| `sae_java_bug/artifacts/multi_model_probing/` | Cached activation NPZ files |
-| `figures/` | PDF figures (20+) |
-
-## ✅ Pipeline Steps
-
-```
-0️⃣ Extract activations (GPUs heavily used)
-   ↓
-1️⃣ Run experiments (CPU-intensive probing)
-   ↓
-2️⃣ Generate base figures (fast, ~1 min)
-   ↓
-3️⃣ Generate per-model figures (fast, ~1 min)
-   ↓
-4️⃣ Generate critical paper figures (fast, ~1 min)
-```
-
-## 💡 Smart Caching
-
+### Run Specific Models Only
 ```bash
-# First run: Extract activations (2-3 hrs)
-./run_pipeline.sh --datasets=sven,precisebugs
-
-# Reuse cached activations for new models (1 hr)
-./run_pipeline.sh --datasets=sven,precisebugs \
-                  --models=codellama-13b \
-                  --figures-only
-
-# Fast figure updates (1 min)
-./run_pipeline.sh --datasets=sven,precisebugs --figures-only
+python scripts/pipeline_full_analysis.py --stage steering --models qwen
+python scripts/regenerate_steering_plots.py --models qwen
 ```
 
-## 🔧 Troubleshooting
+## In the Paper
 
-**Out of memory?**
-- Reduce models: `--models=qwen-7b`
-- Reduce datasets: `--datasets=sven`
-- Use CPU: Edit `multi_dataset_activations.py`, set `DEVICE = "cpu"`
+### Results Section
+The steering analysis appears in:
+- Section 4 (Results) - "Causal validation: confirming the direction is mechanistically real"
+- Fig 9 - Direction steering curves and effect magnitudes
+- Discussion of layer-by-layer effects
 
-**Missing HuggingFace access?**
+### Supporting Materials
+- Appendix - Full technical details of steering methodology
+- Supplementary figures - Additional models and datasets (if run)
+
+## Troubleshooting
+
+**Q: Plot generation fails**  
+A: Check if results exist:
 ```bash
-huggingface-cli login
+ls results/raw_data/steering_results_*.json
 ```
 
-**Want to skip long activation extraction?**
-```bash
-# Use --skip-activations to reuse cached data
-./run_pipeline.sh --datasets=sven --skip-activations --figures-only
-```
+**Q: Steering experiments are slow**  
+A: Expected! GPU recommended, ~30 min per model on A100
 
-## 📖 Full Documentation
+**Q: "Dataset file not found"**  
+A: Steering needs raw code pairs. May need to run geometry first or check data path.
 
-For comprehensive details, see: `MULTI_DATASET_PIPELINE.md`
+**Q: Want to modify parameters**  
+A: Edit constants in:
+- `run_steering_pipeline.py`: `LAYERS_TO_TEST`, `ALPHA_VALUES`, `DEVICE`
+- `regenerate_steering_plots.py`: color schemes, figure sizes
+
+## Next Steps
+
+1. **Verify it works:** Run one of the quick commands above
+2. **Check output:** Look for PDFs in `figures/`
+3. **Update paper:** Add steering plots to results/appendix
+4. **Document:** Include command used in reproducibility statement
+
+## Key Files to Know
+
+| File | Purpose |
+|------|---------|
+| `pipeline_full_analysis.py` | Main entry point - run this |
+| `PIPELINE_README.md` | Full documentation |
+| `STEERING_ANALYSIS_GUIDE.md` | Detailed steering methodology |
+| `run_steering_pipeline.py` | Compute steering experiments |
+| `regenerate_steering_plots.py` | Create plots from results |
+| `regenerate_steering_plots_from_existing.py` | Quick plot from legacy data |
 
 ---
 
-**Status**: ✅ Ready to Use  
-**Version**: 2.0 (Multi-Dataset)
+**Questions?** Check the detailed guides:
+- `PIPELINE_README.md` for architecture and stages
+- `STEERING_ANALYSIS_GUIDE.md` for methodology details
+- Script comments for implementation specifics
