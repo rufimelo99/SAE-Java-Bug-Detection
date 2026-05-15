@@ -55,16 +55,37 @@ REPO_ROOT = Path(__file__).parent.parent.parent   # SAE-Java-Bug-Detection/
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 MODELS: dict[str, dict] = {
+    "qwen-7b": {
+        "hf_id": "Qwen/Qwen2.5-7B-Instruct",
+        "layers": None,  # None = all layers
+    },
+    "qwen-coder-7b": {
+        "hf_id": "Qwen/Qwen2.5-Coder-7B-Instruct",
+        "layers": None,
+    },
     "codellama-7b": {
         "hf_id": "codellama/CodeLlama-7b-Instruct-hf",
-        # CodeLlama-7B has 32 transformer layers (0–31).
-        # Mirrors Qwen's 0,3,7,11,15,19,23,27 selection for comparability.
-        "layers": [0, 3, 7, 11, 15, 19, 23, 27],
+        "layers": None,
+    },
+    "codellama-13b": {
+        "hf_id": "codellama/CodeLlama-13b-Instruct-hf",
+        "layers": None,
     },
     "starcoder2-7b": {
         "hf_id": "bigcode/starcoder2-7b",
-        # StarCoder2-7B also has 32 transformer layers.
-        "layers": [0, 3, 7, 11, 15, 19, 23, 27],
+        "layers": None,
+    },
+    "starcoder2-15b": {
+        "hf_id": "bigcode/starcoder2-15b",
+        "layers": None,
+    },
+    "deepseekcoder-7b": {
+        "hf_id": "deepseek-ai/deepseek-coder-7b-instruct-v1.5",
+        "layers": None,
+    },
+    "llama3-8b": {
+        "hf_id": "meta-llama/Meta-Llama-3-8B-Instruct",
+        "layers": None,
     },
 }
 
@@ -93,7 +114,7 @@ WITHIN_LANGS: dict[str, str] = {
 }
 MIN_WITHIN_LANG = 50   # skip language strata smaller than this
 
-RESULTS_DIR = REPO_ROOT / "results" / "multi_model_probing"
+DEFAULT_ACTIVATIONS_DIR = REPO_ROOT / "sae_java_bug" / "artifacts" / "multi_model_probing"
 
 
 # ── Data loading ───────────────────────────────────────────────────────────────
@@ -167,7 +188,6 @@ def extract_activations(
         }
 
     hf_id  = model_cfg["hf_id"]
-    layers = model_cfg["layers"]
 
     print(f"  Loading tokenizer: {hf_id}")
     tokenizer = AutoTokenizer.from_pretrained(hf_id, trust_remote_code=True)
@@ -182,7 +202,9 @@ def extract_activations(
     ).to(device).eval()
     torch.set_grad_enabled(False)
 
-    print(f"  Model has {model.config.num_hidden_layers} layers. Probing: {layers}")
+    n_layers = model.config.num_hidden_layers
+    layers = model_cfg["layers"] if model_cfg["layers"] is not None else list(range(n_layers))
+    print(f"  Model has {n_layers} layers. Probing: {len(layers)} layers (0–{layers[-1]})")
 
     # Accumulators: layer → list[ndarray | None]
     bufs: dict[str, dict[int, list]] = {
@@ -349,10 +371,11 @@ def run_experiments(
     model_cfg:  dict,
     pairs:      list[dict],
     device:     str,
+    output_dir: Path,
 ) -> list[dict]:
     print(f"\n{'='*60}\n  Model: {model_name}  ({model_cfg['hf_id']})\n{'='*60}")
 
-    cache_path  = RESULTS_DIR / f"activations_{model_name}.npz"
+    cache_path  = output_dir / f"activations_{model_name}.npz"
     acts        = extract_activations(pairs, model_cfg, cache_path, device)
     layers      = model_cfg["layers"]
 
@@ -422,13 +445,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Multi-model vulnerability probing")
     parser.add_argument(
         "--model",
-        choices=list(MODELS.keys()) + ["both"],
-        default="both",
-        help="Which model(s) to run (default: both)",
+        choices=list(MODELS.keys()) + ["all"],
+        default="all",
+        help="Which model(s) to run (default: all)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_ACTIVATIONS_DIR),
+        help="Directory for cached NPZ activations and probing results",
     )
     args = parser.parse_args()
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     device = (
         "cuda"  if torch.cuda.is_available()
@@ -438,20 +467,20 @@ def main() -> None:
     print(f"Device: {device}")
 
     pairs       = load_pairs()
-    model_names = list(MODELS.keys()) if args.model == "both" else [args.model]
+    model_names = list(MODELS.keys()) if args.model == "all" else [args.model]
 
     all_records: list[dict] = []
     for name in model_names:
-        records = run_experiments(name, MODELS[name], pairs, device)
+        records = run_experiments(name, MODELS[name], pairs, device, output_dir)
         all_records.extend(records)
 
-        out = RESULTS_DIR / f"probing_{name}.jsonl"
+        out = output_dir / f"probing_{name}.jsonl"
         with open(out, "w") as f:
             for r in records:
                 f.write(json.dumps(r) + "\n")
         print(f"\n  {len(records)} records → {out}")
 
-    combined = RESULTS_DIR / "probing_all_models.jsonl"
+    combined = output_dir / "probing_all_models.jsonl"
     with open(combined, "w") as f:
         for r in all_records:
             f.write(json.dumps(r) + "\n")

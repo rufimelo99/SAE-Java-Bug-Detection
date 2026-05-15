@@ -26,8 +26,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-LAYERS = [0, 3, 7, 11, 15, 19, 23, 27]
-
 CWE_FAMILIES = {
     "memory_safety": ["CWE-119", "CWE-120", "CWE-125", "CWE-476", "CWE-787", "CWE-416"],
     "injection": ["CWE-20", "CWE-22", "CWE-78", "CWE-89"],
@@ -37,31 +35,43 @@ CWE_FAMILIES = {
 }
 
 
-def load_metadata(metadata_file: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load metadata from JSONL file."""
+def load_metadata(metadata_file: Path) -> Tuple[np.ndarray, np.ndarray]:
+    """Load metadata from JSON array or JSONL file."""
     logger.info(f"Loading metadata from {metadata_file}")
-    cwes, vulns, file_exts = [], [], []
+    cwes, file_exts = [], []
 
     with open(metadata_file) as f:
-        for line in f:
-            data = json.loads(line)
-            cwes.append(data.get("cwe", "unknown"))
-            vulns.append(int(data.get("vulnerable", 0)))
-            file_exts.append(data.get("file_extension", "unknown"))
+        content = f.read().strip()
+
+    if content.startswith("["):
+        records = json.loads(content)
+    else:
+        records = [json.loads(line) for line in content.splitlines() if line.strip()]
+
+    for data in records:
+        cwes.append(data.get("cwe", "unknown"))
+        file_exts.append(data.get("file_extension", "unknown"))
 
     logger.info(f"Loaded metadata for {len(cwes)} pairs")
-    return np.array(cwes), np.array(vulns), np.array(file_exts)
+    return np.array(cwes), np.array(file_exts)
 
 
 def load_activations_npz(npz_file: Path) -> Dict[str, np.ndarray]:
     """Load activations from NPZ file."""
     logger.info(f"Loading activations from {npz_file.name}")
     data = np.load(npz_file)
-    activations = {}
-    for key in data.files:
-        activations[key] = data[key]
+    activations = {key: data[key] for key in data.files}
     logger.info(f"Loaded {len(activations)} activation arrays")
     return activations
+
+
+def get_layers(activations: Dict[str, np.ndarray]) -> List[int]:
+    """Detect available layers from NPZ keys."""
+    return sorted({
+        int(k.split("_")[1])
+        for k in activations
+        if k.startswith("layer_") and k.endswith("_vuln_mean")
+    })
 
 
 class ExperimentPipeline:
@@ -94,14 +104,14 @@ class ExperimentPipeline:
         results = {
             "model": model,
             "experiment": "direction_geometry",
-            "n_pairs": len(labels["vulnerable"]),
+            "n_pairs": len(next(v for k, v in activations.items() if "vuln" in k)),
             "layers": {},
             "cross_layer_cosines": {},
         }
 
         layer_directions = {}
 
-        for layer in LAYERS:
+        for layer in get_layers(activations):
             key_vuln = f"layer_{layer}_vuln_mean"
             key_sec = f"layer_{layer}_secure_mean"
 
@@ -136,12 +146,8 @@ class ExperimentPipeline:
             }
 
         # Cross-layer cosine similarities
-        for l1 in LAYERS:
-            if l1 not in layer_directions:
-                continue
-            for l2 in LAYERS:
-                if l2 not in layer_directions:
-                    continue
+        for l1 in layer_directions:
+            for l2 in layer_directions:
                 cosine = np.dot(layer_directions[l1], layer_directions[l2])
                 key = f"{l1}-{l2}"
                 results["cross_layer_cosines"][key] = float(cosine)
@@ -320,10 +326,10 @@ def main():
     )
     parser.add_argument(
         "--metadata-file",
-        default="/work7/ruimelo/SAE-Java-Bug-Detection/sae_java_bug/artifacts/activations/TO_UPLOAD/activations_layer_11_sae_blocks.11.hook_resid_post_component_hook_resid_post.hook_sae_acts_post.jsonl",
-        help="Path to metadata JSONL file",
+        default="/work7/ruimelo/SAE-Java-Bug-Detection/sae_java_bug/artifacts/activations/advanced_pool/20260308_214306/meta.json",
+        help="Path to metadata JSON or JSONL file (vuln_id, cwe, file_extension per pair)",
     )
-    parser.add_argument("--language", default="c", help="Language to analyze (c, all)")
+    parser.add_argument("--language", default="all", help="Language to analyze (e.g. c, cc, java, all)")
     parser.add_argument(
         "--skip-existing", action="store_true", help="Skip existing results"
     )
@@ -351,15 +357,16 @@ def main():
         return 1
 
     # Load metadata once
-    cwes, vulns, file_exts = load_metadata(metadata_file)
+    cwes, file_exts = load_metadata(metadata_file)
 
-    # Filter by language if specified
+    # Build language mask (applied to both metadata and activations)
     if args.language != "all":
         lang_mask = file_exts == args.language
         cwes = cwes[lang_mask]
-        vulns = vulns[lang_mask]
         file_exts = file_exts[lang_mask]
         logger.info(f"Filtered to {len(cwes)} {args.language} pairs")
+    else:
+        lang_mask = None
 
     pipeline = ExperimentPipeline(output_dir, args.skip_existing)
 
@@ -384,9 +391,16 @@ def main():
 
         try:
             activations = load_activations_npz(npz_file)
+
+            # Apply language mask to activations to keep them aligned with metadata
+            if lang_mask is not None:
+                activations = {
+                    k: v[lang_mask] for k, v in activations.items()
+                    if k != "valid_mask" and v.ndim >= 1 and len(v) == len(lang_mask)
+                }
+
             labels = {
                 "cwe": cwes,
-                "vulnerable": vulns,
                 "file_extension": file_exts,
             }
 
