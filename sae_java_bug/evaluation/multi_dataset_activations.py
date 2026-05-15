@@ -28,8 +28,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -49,17 +48,20 @@ MODELS = {
 DATASETS = {
     "deltasecommits": {
         "description": "DeltaSecommits C vulnerabilities",
-        "data_source": REPO_ROOT / "sae_java_bug/artifacts/activations/TO_UPLOAD/activations_layer_11_sae_blocks.11.hook_resid_post_component_hook_resid_post.hook_sae_acts_post.jsonl",
+        "data_source": REPO_ROOT
+        / "sae_java_bug/artifacts/activations/TO_UPLOAD/activations_layer_11_sae_blocks.11.hook_resid_post_component_hook_resid_post.hook_sae_acts_post.jsonl",
         "output_dir": REPO_ROOT / "sae_java_bug/artifacts/multi_model_probing",
     },
     "sven": {
         "description": "SVEN C vulnerabilities",
-        "data_source": REPO_ROOT / "sae_java_bug/artifacts/activations/sven_c_only/split_meta.json",
+        "data_source": REPO_ROOT
+        / "sae_java_bug/artifacts/data/sven_raw/sven_c_pairs.jsonl",
         "output_dir": REPO_ROOT / "sae_java_bug/artifacts/multi_model_probing",
     },
     "precisebugs": {
         "description": "PreciseBugs C vulnerabilities",
-        "data_source": REPO_ROOT / "sae_java_bug/artifacts/activations/precisebugs_c_only/split_meta.json",
+        "data_source": REPO_ROOT
+        / "sae_java_bug/artifacts/data/precisebugs_raw/precisebugs_c_pairs.jsonl",
         "output_dir": REPO_ROOT / "sae_java_bug/artifacts/multi_model_probing",
     },
 }
@@ -90,68 +92,72 @@ def load_deltasecommits_pairs(data_source: Path) -> list[dict]:
             sec_code = _b64decode(r.get("secure_code", ""))
             if not vuln_code.strip() or not sec_code.strip():
                 continue
-            pairs.append({
-                "vuln_id": r.get("vuln_id", ""),
-                "cwe": r.get("cwe", ""),
-                "file_extension": r.get("file_extension", "").lstrip(".").lower(),
-                "vulnerable_code": vuln_code,
-                "secure_code": sec_code,
-            })
+            pairs.append(
+                {
+                    "vuln_id": r.get("vuln_id", ""),
+                    "cwe": r.get("cwe", ""),
+                    "file_extension": r.get("file_extension", "").lstrip(".").lower(),
+                    "vulnerable_code": vuln_code,
+                    "secure_code": sec_code,
+                }
+            )
     logger.info(f"  {len(pairs):,} valid pairs loaded.")
     return pairs
 
 
-def load_sven_pairs(data_source: Path, code_dir: Path) -> list[dict]:
-    """Load SVEN code pairs from metadata + code directory."""
+def load_sven_pairs(data_source: Path, code_dir: Path = None) -> list[dict]:
+    """Load SVEN code pairs from JSONL file."""
     if not data_source.exists():
-        raise FileNotFoundError(f"Metadata not found: {data_source}")
+        raise FileNotFoundError(f"Data file not found: {data_source}")
 
     logger.info(f"Loading SVEN pairs from {data_source}")
     pairs = []
     with open(data_source) as f:
-        records = json.load(f)
-    
-    for r in records:
-        vuln_id = r.get("vuln_id", "")
-        cwe = r.get("cwe", "")
-        # TODO: Load actual code from SVEN directory structure
-        # For now, using placeholder
-        if cwe.startswith("CWE"):
-            pairs.append({
-                "vuln_id": vuln_id,
-                "cwe": cwe,
-                "file_extension": "c",
-                "vulnerable_code": "",  # Load from actual files
-                "secure_code": "",
-            })
-    
-    logger.info(f"  {len(pairs):,} pairs loaded (requires code file access).")
+        for line in f:
+            r = json.loads(line)
+            vuln_code = r.get("vulnerable_code", "")
+            sec_code = r.get("secure_code", "")
+            if not vuln_code.strip() or not sec_code.strip():
+                continue
+            pairs.append(
+                {
+                    "vuln_id": r.get("vuln_id", ""),
+                    "cwe": r.get("cwe", ""),
+                    "file_extension": r.get("file_extension", "c").lstrip(".").lower(),
+                    "vulnerable_code": vuln_code,
+                    "secure_code": sec_code,
+                }
+            )
+
+    logger.info(f"  {len(pairs):,} valid pairs loaded.")
     return pairs
 
 
 def load_precisebugs_pairs(data_source: Path) -> list[dict]:
-    """Load PreciseBugs code pairs from metadata."""
+    """Load PreciseBugs code pairs from JSONL file."""
     if not data_source.exists():
-        raise FileNotFoundError(f"Metadata not found: {data_source}")
+        raise FileNotFoundError(f"Data file not found: {data_source}")
 
     logger.info(f"Loading PreciseBugs pairs from {data_source}")
     pairs = []
     with open(data_source) as f:
-        records = json.load(f)
-    
-    for r in records:
-        vuln_id = r.get("vuln_id", "")
-        cwe = r.get("cwe", "")
-        if cwe.startswith("CWE"):
-            pairs.append({
-                "vuln_id": vuln_id,
-                "cwe": cwe,
-                "file_extension": "c",
-                "vulnerable_code": "",  # Load from actual files
-                "secure_code": "",
-            })
-    
-    logger.info(f"  {len(pairs):,} pairs loaded (requires code file access).")
+        for line in f:
+            r = json.loads(line)
+            vuln_code = r.get("vulnerable_code", "")
+            sec_code = r.get("secure_code", "")
+            if not vuln_code.strip() or not sec_code.strip():
+                continue
+            pairs.append(
+                {
+                    "vuln_id": r.get("vuln_id", ""),
+                    "cwe": r.get("cwe", ""),
+                    "file_extension": r.get("file_extension", "c").lstrip(".").lower(),
+                    "vulnerable_code": vuln_code,
+                    "secure_code": sec_code,
+                }
+            )
+
+    logger.info(f"  {len(pairs):,} valid pairs loaded.")
     return pairs
 
 
@@ -219,10 +225,10 @@ def extract_activations(
                         continue
 
                     layer_acts = hidden_states[layer]  # (batch, seq_len, hidden)
-                    
+
                     # Last token
                     last_token = layer_acts[0, -1, :].cpu().numpy().astype(np.float32)
-                    
+
                     # Mean token
                     mean_token = layer_acts[0].mean(0).cpu().numpy().astype(np.float32)
 
@@ -250,7 +256,7 @@ def extract_activations(
 
     np.savez(cache_path, **save_data)
     logger.info(f"Saved activations to {cache_path}")
-    
+
     return activations
 
 
@@ -259,17 +265,15 @@ def main():
     parser.add_argument(
         "--datasets",
         default="deltasecommits",
-        help="Comma-separated datasets (deltasecommits, sven, precisebugs)"
+        help="Comma-separated datasets (deltasecommits, sven, precisebugs)",
     )
     parser.add_argument(
         "--models",
         default="qwen-7b,codellama-7b,starcoder2-7b",
-        help="Comma-separated models"
+        help="Comma-separated models",
     )
     parser.add_argument(
-        "--layers",
-        default="3,7,11,15,19,23,27",
-        help="Comma-separated layer indices"
+        "--layers", default="3,7,11,15,19,23,27", help="Comma-separated layer indices"
     )
     args = parser.parse_args()
 
@@ -277,13 +281,13 @@ def main():
     models = [m.strip() for m in args.models.split(",")]
     layers = [int(l.strip()) for l in args.layers.split(",")]
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info(f"Multi-Dataset Activation Extraction")
     logger.info(f"Datasets: {datasets}")
     logger.info(f"Models: {models}")
     logger.info(f"Layers: {layers}")
     logger.info(f"Device: {DEVICE}")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     for dataset in datasets:
         if dataset not in DATASETS:
@@ -302,7 +306,7 @@ def main():
         if dataset == "deltasecommits":
             pairs = load_deltasecommits_pairs(data_source)
         elif dataset == "sven":
-            pairs = load_sven_pairs(data_source, data_source.parent)
+            pairs = load_sven_pairs(data_source)
         elif dataset == "precisebugs":
             pairs = load_precisebugs_pairs(data_source)
         else:
@@ -331,11 +335,13 @@ def main():
                     cache_path=cache_path,
                 )
             except Exception as e:
-                logger.error(f"Failed to extract activations for {dataset}/{model}: {e}")
+                logger.error(
+                    f"Failed to extract activations for {dataset}/{model}: {e}"
+                )
 
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("✓ Activation extraction complete!")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
 
 if __name__ == "__main__":
