@@ -43,7 +43,7 @@ GEOMETRY_SCRIPTS = [
     ("Multimodel alignment comparison", "regenerate_multimodel_alignment_styled.py"),
     (
         "Multimodel magnitude comparison",
-        "regenerate_multimodel_magnitude_comparison.py",
+        "regenerate_multimodel_magnitude_styled.py",
     ),
     ("Paired distances analysis", "regenerate_paired_distances_styled.py"),
     ("Direction transfer (families)", "regenerate_direction_transfer_styled.py"),

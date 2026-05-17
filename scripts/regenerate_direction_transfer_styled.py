@@ -12,8 +12,6 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import seaborn as sns
 
 # Match style of other paper figures
 mpl.rcParams.update(
@@ -81,48 +79,50 @@ def generate_transfer_heatmap(model: str):
             else:
                 matrix[i, j] = np.nan
 
-    # Create DataFrame
-    df = pd.DataFrame(matrix, index=family_names, columns=family_names)
-
-    # Plot heatmap
-    fig, ax = plt.subplots(figsize=(7, 6))
-
-    sns.heatmap(
-        df,
-        ax=ax,
-        vmin=70,
-        vmax=90,
-        cmap="RdYlGn",
-        annot=True,
-        fmt=".1f",
-        annot_kws={"size": 8},
-        linewidths=0.5,
-        square=True,
-        cbar_kws={"label": "Transfer alignment (%)"},
-    )
-
-    # Grey diagonal for self-family
-    for i in range(n):
-        ax.add_patch(plt.Rectangle((i, i), 1, 1, fill=True, color="#cccccc", lw=0))
-
-    # Labels
-    ax.set_xlabel("Test on (direction evaluated on)", fontsize=9, fontweight="normal")
-    ax.set_ylabel("Train on (direction computed from)", fontsize=9, fontweight="normal")
-
     # Calculate mean transfer (off-diagonal)
     off_diag = matrix[~np.eye(n, dtype=bool)]
     mean_transfer = np.nanmean(off_diag)
     std_transfer = np.nanstd(off_diag)
+
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    im = ax.imshow(matrix, cmap="RdYlGn", vmin=70, vmax=90, aspect="equal")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Transfer alignment (%)", fontsize=8)
+
+    # Grey diagonal for self-family
+    for i in range(n):
+        ax.add_patch(plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0))
+
+    # Cell annotations
+    for i in range(n):
+        for j in range(n):
+            val = matrix[i, j]
+            if not np.isnan(val):
+                ax.text(j, i, f"{val:.1f}", ha="center", va="center", fontsize=8)
+
+    # Grid lines
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="white", linewidth=0.5)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(family_names, rotation=45, ha="right", fontsize=8)
+    ax.set_yticklabels(family_names, fontsize=8)
+
+    # Labels
+    ax.set_xlabel("Test on (direction evaluated on)", fontsize=9, fontweight="normal")
+    ax.set_ylabel("Train on (direction computed from)", fontsize=9, fontweight="normal")
 
     ax.set_title(
         f"Cross-family vulnerability direction transfer\n(mean: {mean_transfer:.1f}% ± {std_transfer:.1f}%)",
         fontsize=10,
         fontweight="normal",
     )
-
-    # Rotate labels
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
 
     fig.tight_layout()
 

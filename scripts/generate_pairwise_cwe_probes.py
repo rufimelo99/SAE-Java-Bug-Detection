@@ -58,46 +58,61 @@ OUTPUT_DIR = (
 RESULTS_DIR = _PROJECT_DIR / "results" / "raw_data"
 
 # Top CWE types to include
-CWE_TYPES = [
-    "CWE-119",  # Buffer Overflow
-    "CWE-120",  # Buffer Copy without Bounds Check
-    "CWE-125",  # Out-of-bounds Read
-    "CWE-787",  # Out-of-bounds Write
-    "CWE-78",  # OS Command Injection
-    "CWE-89",  # SQL Injection
-    "CWE-22",  # Path Traversal
-    "CWE-401",  # Missing Release of Resource
-]
+# CWE types to include — covers DeltaSecommits, SVEN, and PreciseBugs
+CWE_TYPES = {
+    # DeltaSecommits / SVEN
+    "CWE-119", "CWE-120", "CWE-125", "CWE-787",
+    "CWE-78",  "CWE-89",  "CWE-22",  "CWE-401",
+    # PreciseBugs
+    "CWE-190", "CWE-122", "CWE-476", "CWE-369",
+    "CWE-457", "CWE-121", "CWE-416",
+}
 
 
-_KNOWN_DATASETS = {"deltasecommits", "sven", "precisebugs"}
+# Maps dataset prefix → raw JSONL with CWE labels
+_DATASET_METADATA: Dict[str, Path] = {
+    "deltasecommits": METADATA_FILE,  # existing meta.json
+    "sven": _PROJECT_DIR / "sae_java_bug" / "artifacts" / "data" / "sven_raw" / "sven_c_pairs.jsonl",
+    "precisebugs": _PROJECT_DIR / "sae_java_bug" / "artifacts" / "data" / "precisebugs_raw" / "precisebugs_c_pairs.jsonl",
+}
 
 
 def discover_models() -> List[str]:
-    """Auto-discover models from available NPZ files, skipping dataset-prefixed ones."""
-    models = []
-    for npz in sorted(ACTIVATIONS_DIR.glob("activations_*.npz")):
-        name = npz.stem.replace("activations_", "")
-        # Skip files named activations_{dataset}_{model}.npz
-        prefix = name.split("_")[0]
-        if prefix in _KNOWN_DATASETS:
-            continue
-        models.append(name)
-    return models
+    """Auto-discover models from available NPZ files (all datasets included)."""
+    return [
+        npz.stem.replace("activations_", "")
+        for npz in sorted(ACTIVATIONS_DIR.glob("activations_*.npz"))
+    ]
 
 
-def load_metadata() -> np.ndarray:
-    """Load CWE labels from the metadata file."""
-    if not METADATA_FILE.exists():
-        logger.warning(f"Metadata file not found: {METADATA_FILE}")
+def _dataset_of(model_full: str) -> str:
+    """Return the dataset prefix for a model name, or 'deltasecommits' if none."""
+    for ds in _DATASET_METADATA:
+        if model_full.startswith(ds + "_"):
+            return ds
+    return "deltasecommits"
+
+
+def load_metadata_for(model_full: str) -> np.ndarray:
+    """Load CWE labels from the appropriate metadata file for this model/dataset."""
+    ds = _dataset_of(model_full)
+    path = _DATASET_METADATA.get(ds, METADATA_FILE)
+    if not path.exists():
+        logger.warning(f"Metadata file not found for dataset '{ds}': {path}")
         return np.array([])
-    with open(METADATA_FILE) as f:
+    with open(path) as f:
         content = f.read().strip()
     if content.startswith("["):
         records = json.loads(content)
     else:
         records = [json.loads(line) for line in content.splitlines() if line.strip()]
-    return np.array([r.get("cwe", "unknown") for r in records])
+    def _normalize(cwe: str) -> str:
+        # Normalize CWE-022 → CWE-22, CWE-078 → CWE-78, etc.
+        if cwe.startswith("CWE-"):
+            return "CWE-" + str(int(cwe[4:]))
+        return cwe
+
+    return np.array([_normalize(r.get("cwe", "unknown")) for r in records])
 
 
 def get_peak_layer(activations: Dict[str, np.ndarray]) -> int:
@@ -257,9 +272,13 @@ def _probe_matrix(
     return matrix
 
 
-def run_probing(model_full: str, cwes: np.ndarray):
+def run_probing(model_full: str):
     """Compute AUROC matrix for every layer, save all to JSON, plot peak layer."""
     logger.info(f"\nGenerating pairwise CWE probes for {model_full}...")
+    cwes = load_metadata_for(model_full)
+    if len(cwes) == 0:
+        logger.warning(f"No metadata for {model_full} — skipping")
+        return
 
     npz_file = ACTIVATIONS_DIR / f"activations_{model_full}.npz"
     if not npz_file.exists():
@@ -374,11 +393,6 @@ def main():
         return
 
     logger.info("Generating pairwise CWE probe AUROC heatmaps...")
-    cwes = load_metadata()
-    if len(cwes) == 0:
-        logger.error("No metadata loaded — cannot generate heatmaps")
-        return
-
     models = discover_models()
     if not models:
         logger.warning(f"No NPZ files found in {ACTIVATIONS_DIR}")
@@ -390,13 +404,11 @@ def main():
         if args.skip_existing:
             json_path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
             if json_path.exists():
-                logger.info(
-                    f"  Skipping {model_full} (already computed, regenerating figure)"
-                )
+                logger.info(f"  Skipping {model_full} (already computed, regenerating figure)")
                 figures_from_saved(model_full, layer=args.layer)
                 continue
         try:
-            run_probing(model_full, cwes)
+            run_probing(model_full)
         except Exception as e:
             logger.error(f"Error processing {model_full}: {e}")
 
