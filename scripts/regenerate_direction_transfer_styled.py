@@ -87,21 +87,34 @@ def generate_transfer_heatmap(model: str):
     # Plot heatmap
     fig, ax = plt.subplots(figsize=(7, 6))
 
-    im = ax.imshow(matrix, cmap="RdYlGn", vmin=70, vmax=90, aspect="equal")
-
-    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Transfer alignment (%)", fontsize=8)
+    # Normalize matrix to [0, 1] for consistent color mapping
+    matrix_norm = matrix / 100.0
+    im = ax.imshow(matrix_norm, cmap="RdYlGn", vmin=0.0, vmax=1.0, aspect="equal")
 
     # Grey diagonal for self-family
     for i in range(n):
-        ax.add_patch(plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0))
+        ax.add_patch(
+            plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0)
+        )
 
-    # Cell annotations
+    # Cell annotations with dynamic text color for contrast
     for i in range(n):
         for j in range(n):
             val = matrix[i, j]
             if not np.isnan(val):
-                ax.text(j, i, f"{val:.1f}", ha="center", va="center", fontsize=8)
+                # Use white text on dark backgrounds, black on light backgrounds
+                val_norm = val / 100.0
+                text_color = "white" if val_norm > 0.6 else "black"
+                ax.text(
+                    j,
+                    i,
+                    f"{val:.1f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color=text_color,
+                    fontweight="normal",
+                )
 
     # Grid lines
     ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)

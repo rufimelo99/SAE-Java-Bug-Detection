@@ -201,9 +201,21 @@ python generate_steering_style_plots.py
 echo ""
 echo -e "${GREEN}✓ Multi-model styled figures generated${NC}"
 
-# Step 4: Generate missing critical figures
+# Step 4: Generate paper heatmaps (multi-model alignment, ranking accuracy)
 echo ""
-echo -e "${YELLOW}Step 4: Generating critical paper figures...${NC}"
+echo -e "${YELLOW}Step 4: Generating paper analysis heatmaps...${NC}"
+echo ""
+
+cd "$SCRIPT_DIR"
+
+python generate_paper_heatmaps.py
+
+echo ""
+echo -e "${GREEN}✓ Paper heatmaps generated${NC}"
+
+# Step 5: Generate missing critical figures
+echo ""
+echo -e "${YELLOW}Step 5: Generating critical paper figures...${NC}"
 echo ""
 
 bash generate_missing_figures.sh --models="$MODELS"
@@ -211,10 +223,10 @@ bash generate_missing_figures.sh --models="$MODELS"
 echo ""
 echo -e "${GREEN}✓ Critical figures generated${NC}"
 
-# Step 5: Run steering experiments (if not skipped)
+# Step 6: Run steering experiments (if not skipped)
 if [ -z "$SKIP_ACTIVATIONS" ] && [ -z "$FIGURES_ONLY" ]; then
     echo ""
-    echo -e "${YELLOW}Step 5: Running steering experiments...${NC}"
+    echo -e "${YELLOW}Step 6: Running steering experiments...${NC}"
     echo ""
 
     # Check if steering results already exist
@@ -277,10 +289,11 @@ echo "Generated figures (per dataset):"
 echo "  ✓ Base multi-model figures (5): per-pair alignment, paired distances, CWE transfer"
 echo "  ✓ Per-model styled figures (6): CWE pairwise heatmaps + alignment curves"
 echo "  ✓ Multi-model comparison plots (3): alignment, magnitude, stability"
+echo "  ✓ Paper analysis heatmaps (2): multi-model alignment, ranking accuracy"
 echo "  ✓ Critical paper figures (3): Pairwise CWE-type probe AUROC heatmaps"
 echo "  ✓ Steering causal validation (3): Direction steering effect on preference"
 echo ""
-echo "Total: 20+ publication-quality figures per dataset"
+echo "Total: 22+ publication-quality figures per dataset"
 echo ""
 echo "Pipeline Features:"
 echo "  • Multi-dataset support: DeltaSecommits, SVEN, PreciseBugs"

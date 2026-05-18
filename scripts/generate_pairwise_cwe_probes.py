@@ -61,19 +61,40 @@ RESULTS_DIR = _PROJECT_DIR / "results" / "raw_data"
 # CWE types to include — covers DeltaSecommits, SVEN, and PreciseBugs
 CWE_TYPES = {
     # DeltaSecommits / SVEN
-    "CWE-119", "CWE-120", "CWE-125", "CWE-787",
-    "CWE-78",  "CWE-89",  "CWE-22",  "CWE-401",
+    "CWE-119",
+    "CWE-120",
+    "CWE-125",
+    "CWE-787",
+    "CWE-78",
+    "CWE-89",
+    "CWE-22",
+    "CWE-401",
     # PreciseBugs
-    "CWE-190", "CWE-122", "CWE-476", "CWE-369",
-    "CWE-457", "CWE-121", "CWE-416",
+    "CWE-190",
+    "CWE-122",
+    "CWE-476",
+    "CWE-369",
+    "CWE-457",
+    "CWE-121",
+    "CWE-416",
 }
 
 
 # Maps dataset prefix → raw JSONL with CWE labels
 _DATASET_METADATA: Dict[str, Path] = {
     "deltasecommits": METADATA_FILE,  # existing meta.json
-    "sven": _PROJECT_DIR / "sae_java_bug" / "artifacts" / "data" / "sven_raw" / "sven_c_pairs.jsonl",
-    "precisebugs": _PROJECT_DIR / "sae_java_bug" / "artifacts" / "data" / "precisebugs_raw" / "precisebugs_c_pairs.jsonl",
+    "sven": _PROJECT_DIR
+    / "sae_java_bug"
+    / "artifacts"
+    / "data"
+    / "sven_raw"
+    / "sven_c_pairs.jsonl",
+    "precisebugs": _PROJECT_DIR
+    / "sae_java_bug"
+    / "artifacts"
+    / "data"
+    / "precisebugs_raw"
+    / "precisebugs_c_pairs.jsonl",
 }
 
 
@@ -106,6 +127,7 @@ def load_metadata_for(model_full: str) -> np.ndarray:
         records = json.loads(content)
     else:
         records = [json.loads(line) for line in content.splitlines() if line.strip()]
+
     def _normalize(cwe: str) -> str:
         # Normalize CWE-022 → CWE-22, CWE-078 → CWE-78, etc.
         if cwe.startswith("CWE-"):
@@ -216,18 +238,30 @@ def plot_heatmap(
 
     fig, ax = plt.subplots(figsize=(8.5, 7.5))
 
-    im = ax.imshow(matrix_norm, cmap="RdYlGn", vmin=0.4, vmax=1.0, aspect="equal")
+    im = ax.imshow(matrix_norm, cmap="RdYlGn", vmin=0.0, vmax=1.0, aspect="equal")
 
     # Grey diagonal for self-pairs
     for i in range(n):
-        ax.add_patch(plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0))
+        ax.add_patch(
+            plt.Rectangle((i - 0.5, i - 0.5), 1, 1, fill=True, color="#cccccc", lw=0)
+        )
 
-    # Cell annotations
+    # Cell annotations with dynamic text color for contrast
     for i in range(n):
         for j in range(n):
-            color = "black"
-            ax.text(j, i, f"{matrix_norm[i, j]:.2f}",
-                    ha="center", va="center", fontsize=9, color=color)
+            # Use white text on dark backgrounds, black on light backgrounds
+            val = matrix_norm[i, j]
+            text_color = "white" if val > 0.6 else "black"
+            ax.text(
+                j,
+                i,
+                f"{matrix_norm[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=9,
+                color=text_color,
+                fontweight="normal",
+            )
 
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
@@ -235,11 +269,6 @@ def plot_heatmap(
     ax.set_yticklabels(cwe_short, fontsize=9)
     ax.set_xlabel("CWE Type (target)", fontsize=10)
     ax.set_ylabel("CWE Type (source)", fontsize=10)
-    ax.set_title(
-        f"Pairwise CWE probe across layers — peak AUROC\n"
-        f"(vulnerable-side mean-token; green = separable, yellow = chance)",
-        fontsize=10, pad=12,
-    )
 
     plt.tight_layout()
 
@@ -404,7 +433,9 @@ def main():
         if args.skip_existing:
             json_path = RESULTS_DIR / f"{model_full}_cwe_pairwise_probe.json"
             if json_path.exists():
-                logger.info(f"  Skipping {model_full} (already computed, regenerating figure)")
+                logger.info(
+                    f"  Skipping {model_full} (already computed, regenerating figure)"
+                )
                 figures_from_saved(model_full, layer=args.layer)
                 continue
         try:
