@@ -207,3 +207,6 @@ sae_java_bug/artifacts/multi_model_probing/activations_codellama-7b.npz
 /sae_java_bug/artifacts/activations/sven_c_only
 /results/raw_data
 results/summary_statistics.txt
+sae_java_bug/artifacts/multi_model_probing/
+sae_java_bug/artifacts/activations/advanced_pool/
+sae_java_bug/artifacts_study/
