@@ -604,9 +604,13 @@ def fig_direction_alignment_combined(
 
     fig, ax = plt.subplots(figsize=(5.5, 3.5))
 
-    # Global alignment (bold line)
+    # Global alignment (bold line) with 90% binomial CI
+    n_c = int(c_mask.sum())
     frac_c = [np.mean(a[c_mask] > 0) for a in align_per_layer]
+    ci_lo_c = [max(0.0, p - 1.645 * np.sqrt(max(p * (1 - p) / n_c, 0))) for p in frac_c]
+    ci_hi_c = [min(1.0, p + 1.645 * np.sqrt(max(p * (1 - p) / n_c, 0))) for p in frac_c]
     ax.plot(xs, frac_c, "o-", color="black", lw=2.5, ms=6, label="Global", zorder=10)
+    ax.fill_between(xs, ci_lo_c, ci_hi_c, alpha=0.12, color="black", linewidth=0, zorder=9)
 
     # Per-family alignment
     family_masks = {}
@@ -625,17 +629,16 @@ def fig_direction_alignment_combined(
     }
 
     for family_name, family_mask in sorted(family_masks.items()):
+        n_fam = int(family_mask.sum())
         frac = [np.mean(a[family_mask] > 0) for a in align_per_layer]
+        ci_lo_f = [max(0.0, p - 1.645 * np.sqrt(max(p * (1 - p) / n_fam, 0))) for p in frac]
+        ci_hi_f = [min(1.0, p + 1.645 * np.sqrt(max(p * (1 - p) / n_fam, 0))) for p in frac]
+        c = colors.get(family_name, "#999999")
         ax.plot(
-            xs,
-            frac,
-            "o-",
-            color=colors.get(family_name, "#999999"),
-            lw=1.5,
-            ms=5,
-            label=family_name,
-            alpha=0.75,
+            xs, frac, "o-", color=c, lw=1.5, ms=5,
+            label=family_name, alpha=0.75,
         )
+        ax.fill_between(xs, ci_lo_f, ci_hi_f, alpha=0.10, color=c, linewidth=0)
 
     ax.axhline(0.5, color="grey", lw=0.8, ls=":", alpha=0.5, label="Chance (50%)")
     ax.axvline(n_layers - 1, color="#d62728", lw=0.8, ls=":", alpha=0.7)

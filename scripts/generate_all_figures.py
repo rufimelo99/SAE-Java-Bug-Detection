@@ -102,6 +102,7 @@ class FigureGenerator:
         fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
         axes = np.array(axes).flatten()
 
+        im = None
         for idx, model in enumerate(self.models):
             key = f"{model}_direction_geometry"
             ax = axes[idx]
@@ -123,18 +124,23 @@ class FigureGenerator:
             ticks = list(range(0, len(layers), tick_step))
             ax.set_xticks(ticks)
             ax.set_yticks(ticks)
-            ax.set_xticklabels([layers[i] for i in ticks], fontsize=7)
-            ax.set_yticklabels([layers[i] for i in ticks], fontsize=7)
-            ax.set_xlabel("Layer", fontsize=9)
-            ax.set_ylabel("Layer", fontsize=9)
-            ax.set_title(model, fontsize=10)
-            plt.colorbar(im, ax=ax, label="Cosine Sim")
+            ax.set_xticklabels([layers[i] for i in ticks], fontsize=11)
+            ax.set_yticklabels([layers[i] for i in ticks], fontsize=11)
+            ax.set_xlabel("Layer", fontsize=12)
+            ax.set_ylabel("Layer", fontsize=12)
+            ax.set_title(model, fontsize=14, fontweight="bold")
 
         for idx in range(n, len(axes)):
             axes[idx].set_visible(False)
 
-        plt.suptitle("Cross-Layer Direction Alignment", fontsize=13, y=1.01)
         plt.tight_layout()
+        if im is not None:
+            fig.subplots_adjust(right=0.88)
+            cbar_ax = fig.add_axes([0.91, 0.1, 0.02, 0.8])
+            fig.colorbar(im, cax=cbar_ax, label="Cosine Sim")
+            cbar_ax.tick_params(labelsize=11)
+            cbar_ax.yaxis.label.set_size(12)
+
         out = self.output_dir / "fig_direction_alignment_heatmaps.pdf"
         plt.savefig(out, dpi=300, bbox_inches="tight")
         logger.info(f"Saved: {out}")

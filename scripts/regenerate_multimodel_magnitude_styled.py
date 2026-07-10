@@ -68,26 +68,36 @@ def generate_magnitude_comparison():
 
         layers_data = data.get("layers", {})
 
-        # Extract mean paired distances for standard layers
-        distances = []
+        # Extract mean paired distances + 90% SE-based CI
+        distances, ci_lo, ci_hi = [], [], []
         for layer_idx in LAYER_INDICES:
             layer_key = str(layer_idx)
             if layer_key in layers_data:
-                dist = layers_data[layer_key].get("mean_paired_distance", 0)
-                distances.append(dist)
+                ld = layers_data[layer_key]
+                mean = ld.get("mean_paired_distance", 0)
+                std  = ld.get("std_paired_distance", 0)
+                n    = ld.get("n_pairs", 1)
+                se   = std / np.sqrt(n)
+                distances.append(mean)
+                ci_lo.append(max(0.0, mean - 1.645 * se))
+                ci_hi.append(mean + 1.645 * se)
             else:
                 distances.append(None)
+                ci_lo.append(None)
+                ci_hi.append(None)
 
-        # Plot with square markers, matching multimodel style but with layer labels
+        x = range(len(LAYER_LABELS))
+        color = MODEL_COLORS[model]
         ax.plot(
-            range(len(LAYER_LABELS)),
-            distances,
-            marker="s",
-            linewidth=2.0,
-            markersize=6,
-            label=MODEL_LABELS[model],
-            color=MODEL_COLORS[model],
+            x, distances,
+            marker="s", linewidth=2.0, markersize=6,
+            label=MODEL_LABELS[model], color=color,
         )
+        # 90% CI band
+        valid = [(i, lo, hi) for i, (lo, hi) in enumerate(zip(ci_lo, ci_hi)) if lo is not None]
+        if valid:
+            xi, los, his = zip(*valid)
+            ax.fill_between(xi, los, his, alpha=0.15, color=color, linewidth=0)
 
     # Set up x-axis with layer labels
     ax.set_xticks(range(len(LAYER_LABELS)))

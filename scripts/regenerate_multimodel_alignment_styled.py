@@ -69,25 +69,34 @@ def generate_alignment_comparison():
         layers_data = data.get("layers", {})
 
         # Extract alignment percentages for standard layers (convert to fraction)
-        alignments = []
+        alignments, ci_lo, ci_hi = [], [], []
         for layer_idx in LAYER_INDICES:
             layer_key = str(layer_idx)
             if layer_key in layers_data:
-                pct = layers_data[layer_key].get("pct_aligned", 0) / 100.0
-                alignments.append(pct)
+                ld = layers_data[layer_key]
+                p = ld.get("pct_aligned", 0) / 100.0
+                n = ld.get("n_pairs", 1)
+                se = np.sqrt(max(p * (1 - p) / n, 0))
+                alignments.append(p)
+                ci_lo.append(max(0.0, p - 1.645 * se))
+                ci_hi.append(min(1.0, p + 1.645 * se))
             else:
                 alignments.append(None)
+                ci_lo.append(None)
+                ci_hi.append(None)
 
-        # Plot with solid line, matching style
+        x = range(len(LAYER_LABELS))
+        color = MODEL_COLORS[model]
         ax.plot(
-            range(len(LAYER_LABELS)),
-            alignments,
-            marker="o",
-            linewidth=2.0,
-            markersize=6,
-            label=MODEL_LABELS[model],
-            color=MODEL_COLORS[model],
+            x, alignments,
+            marker="o", linewidth=2.0, markersize=6,
+            label=MODEL_LABELS[model], color=color,
         )
+        # 90% CI band
+        valid = [(i, lo, hi) for i, (lo, hi) in enumerate(zip(ci_lo, ci_hi)) if lo is not None]
+        if valid:
+            xi, los, his = zip(*valid)
+            ax.fill_between(xi, los, his, alpha=0.15, color=color, linewidth=0)
 
     # Add chance line (50%) as dotted, matching fig_direction_alignment.pdf
     ax.axhline(

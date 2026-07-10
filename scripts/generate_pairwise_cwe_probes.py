@@ -81,6 +81,7 @@ CWE_TYPES = {
 
 
 # Maps dataset prefix → raw JSONL with CWE labels
+# Longer prefixes must come first so _dataset_of() matches most-specific first.
 _DATASET_METADATA: Dict[str, Path] = {
     "deltasecommits": METADATA_FILE,  # existing meta.json
     "sven": _PROJECT_DIR
@@ -89,6 +90,18 @@ _DATASET_METADATA: Dict[str, Path] = {
     / "data"
     / "sven_raw"
     / "sven_c_pairs.jsonl",
+    "precisebugs_security": _PROJECT_DIR
+    / "sae_java_bug"
+    / "artifacts"
+    / "data"
+    / "precisebugs_raw"
+    / "precisebugs_security_c_pairs.jsonl",
+    "precisebugs_nonsecurity": _PROJECT_DIR
+    / "sae_java_bug"
+    / "artifacts"
+    / "data"
+    / "precisebugs_raw"
+    / "precisebugs_nonsecurity_c_pairs.jsonl",
     "precisebugs": _PROJECT_DIR
     / "sae_java_bug"
     / "artifacts"
@@ -272,7 +285,7 @@ def plot_heatmap(
 
     plt.tight_layout()
 
-    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model_full.split('-')[0]}.pdf"
+    output_file = OUTPUT_DIR / f"fig_cwe_pairwise_probe_{model_full}.pdf"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_file, dpi=150, bbox_inches="tight")
     logger.info(f"✓ Figure saved: {output_file}")

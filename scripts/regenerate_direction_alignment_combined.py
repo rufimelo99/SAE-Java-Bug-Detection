@@ -64,17 +64,25 @@ def generate_combined_alignment():
 
         layers_data = data.get("layers", {})
         layers = sorted(int(k) for k in layers_data.keys())
-        alignments = [layers_data[str(l)].get("pct_aligned", 0) for l in layers]
 
+        alignments, ci_lo, ci_hi = [], [], []
+        for l in layers:
+            ld = layers_data[str(l)]
+            p = ld.get("pct_aligned", 0)          # percentage (0–100)
+            pf = p / 100.0
+            n = ld.get("n_pairs", 1)
+            se_pct = 100.0 * np.sqrt(max(pf * (1 - pf) / n, 0))
+            alignments.append(p)
+            ci_lo.append(max(0.0, p - 1.645 * se_pct))
+            ci_hi.append(min(100.0, p + 1.645 * se_pct))
+
+        color = MODEL_COLORS[model]
         ax.plot(
-            layers,
-            alignments,
-            marker="o",
-            linewidth=2.0,
-            markersize=6,
-            label=MODEL_LABELS[model],
-            color=MODEL_COLORS[model],
+            layers, alignments,
+            marker="o", linewidth=2.0, markersize=6,
+            label=MODEL_LABELS[model], color=color,
         )
+        ax.fill_between(layers, ci_lo, ci_hi, alpha=0.15, color=color, linewidth=0)
 
     # Add chance line
     ax.axhline(

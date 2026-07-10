@@ -100,19 +100,27 @@ def generate_combined_family_alignment():
 
             layers_data = dir_data.get("layers", {})
             all_layers = sorted(int(k) for k in layers_data.keys())
-            alignments = [layers_data[str(l)].get("pct_aligned", 0) for l in all_layers]
+            alignments, ci_lo, ci_hi = [], [], []
+            for l in all_layers:
+                ld = layers_data[str(l)]
+                p = ld.get("pct_aligned", 0)
+                pf = p / 100.0
+                n = ld.get("n_pairs", 1)
+                se_pct = 100.0 * np.sqrt(max(pf * (1 - pf) / n, 0))
+                alignments.append(p)
+                ci_lo.append(max(0.0, p - 1.645 * se_pct))
+                ci_hi.append(min(100.0, p + 1.645 * se_pct))
 
+            color = MODEL_COLORS[model]
             # Plot global alignment with bold line
             ax.plot(
-                all_layers,
-                alignments,
-                marker="o",
-                linewidth=2.5,
-                markersize=5,
+                all_layers, alignments,
+                marker="o", linewidth=2.5, markersize=5,
                 label=f"{MODEL_LABELS[model]} (global)",
-                color=MODEL_COLORS[model],
-                zorder=3,
+                color=color, zorder=3,
             )
+            # 90% CI band on global line
+            ax.fill_between(all_layers, ci_lo, ci_hi, alpha=0.12, color=color, linewidth=0, zorder=2)
 
         # Plot per-family alignment (diagonal of transfer matrix = within-family)
         for family in families:
